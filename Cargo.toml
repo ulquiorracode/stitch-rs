@@ -1,0 +1,14 @@
+[package]
+name = "stitch-rs"
+version = "0.1.0"
+edition = "2024"
+authors = ["Stitch Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/statefs-rs/stitch-rs"
+description = "Zero-Cost, Monomorphic U-Cycle Middleware Pipeline Framework (The Sewing Machine Architecture)"
+keywords = ["pipeline", "middleware", "u-cycle", "cqs", "monomorphic"]
+categories = ["rust-patterns", "no-std", "asynchronous"]
+
+[features]
+default = ["std"]
+std = []
