@@ -97,13 +97,11 @@ where
     #[inline(always)]
     fn cycle(&mut self, ctx: &mut TCtx, intent: TIntent) -> Result<TOutcome, TErr> {
         // Phase 1: Descent (Спуск)
-        let intent = match self.middleware.on_enter(ctx, intent) {
-            FlowControl::Proceed(admitted) => admitted,
+        let mut outcome = match self.middleware.on_enter(ctx, intent) {
+            FlowControl::Proceed(admitted) => self.inner.cycle(ctx, admitted),
+            FlowControl::ShortCircuit(early_outcome) => Ok(early_outcome),
             FlowControl::Halt(err) => return Err(err),
         };
-
-        // Inner recursion
-        let mut outcome = self.inner.cycle(ctx, intent);
 
         // Phase 2: Ascent (Подъем)
         self.middleware.on_exit(ctx, &mut outcome);

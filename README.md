@@ -43,30 +43,29 @@ use stitch_rs::middleware::{Middleware, TerminalHandler};
 use stitch_rs::flow::FlowControl;
 
 struct AuthLayer;
-impl<Ctx, Req, Res> Middleware<Ctx, Req, Res> for AuthLayer {
-    fn on_enter(&self, _ctx: &mut Ctx, _req: &mut Req) -> FlowControl {
-        FlowControl::Continue
+impl<Ctx, Req, Res, Err> Middleware<Ctx, Req, Res, Err> for AuthLayer {
+    fn on_enter(&self, _ctx: &mut Ctx, req: Req) -> FlowControl<Req, Res, Err> {
+        FlowControl::Proceed(req)
     }
 
-    fn on_exit(&self, _ctx: &mut Ctx, _res: &mut Res) {
-        // Post-processing logic
+    fn on_exit(&self, _ctx: &mut Ctx, _res: &mut Result<Res, Err>) {
+        // Post-processing and ascent telemetry
     }
 }
 
 struct CoreHandler;
-impl<Ctx, Req, Res: Default> TerminalHandler<Ctx, Req, Res> for CoreHandler {
-    fn handle(&self, _ctx: &mut Ctx, _req: Req) -> Res {
-        Res::default()
+impl<Ctx, Req, Res: Default, Err> TerminalHandler<Ctx, Req, Res, Err> for CoreHandler {
+    fn execute(&mut self, _ctx: &mut Ctx, _req: Req) -> Result<Res, Err> {
+        Ok(Res::default())
     }
 }
 
 fn main() {
-    let pipeline = Pipeline::new()
-        .wrap(AuthLayer)
-        .finish(CoreHandler);
+    let mut pipeline = Pipeline::on_terminal(CoreHandler)
+        .use_middleware(AuthLayer);
 
     let mut ctx = ();
-    let result = pipeline.execute(&mut ctx, ());
+    let result = pipeline.dispatch(&mut ctx, ());
 }
 ```
 

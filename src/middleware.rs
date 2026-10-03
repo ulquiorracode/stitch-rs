@@ -10,8 +10,11 @@ pub trait Middleware<TCtx, TIntent, TOutcome, TErr> {
     /// Phase 1: Descent (Entering the pipeline).
     ///
     /// Evaluates whether to proceed down to deeper layers.
-    /// Returns `FlowControl::Proceed(intent)` to proceed or `FlowControl::Halt(reason)` to halt.
-    fn on_enter(&self, ctx: &mut TCtx, intent: TIntent) -> FlowControl<TIntent, TErr>;
+    /// Returns:
+    /// - `FlowControl::Proceed(intent)` to continue descending,
+    /// - `FlowControl::ShortCircuit(outcome)` to return an immediate success and begin ascent,
+    /// - `FlowControl::Halt(reason)` to abort execution with error.
+    fn on_enter(&self, ctx: &mut TCtx, intent: TIntent) -> FlowControl<TIntent, TOutcome, TErr>;
 
     /// Phase 2: Ascent (Exiting the pipeline).
     ///
