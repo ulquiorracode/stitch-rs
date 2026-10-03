@@ -4,9 +4,9 @@
 //! In release mode, the entire U-cycle (`on_enter` -> `terminal` -> `on_exit`)
 //! is fully inlined by LLVM into a single flat block of machine code.
 
-use core::marker::PhantomData;
 use crate::flow::FlowControl;
 use crate::middleware::{Middleware, TerminalHandler};
+use core::marker::PhantomData;
 
 /// The compile-time monomorphic execution pipeline.
 pub struct Pipeline<TCtx, TIntent, TOutcome, TErr, TChain> {
@@ -23,7 +23,8 @@ pub struct StackNode<M, Inner> {
     pub inner: Inner,
 }
 
-impl<TCtx, TIntent, TOutcome, TErr, TTerm> Pipeline<TCtx, TIntent, TOutcome, TErr, TerminalNode<TTerm>>
+impl<TCtx, TIntent, TOutcome, TErr, TTerm>
+    Pipeline<TCtx, TIntent, TOutcome, TErr, TerminalNode<TTerm>>
 where
     TTerm: TerminalHandler<TCtx, TIntent, TOutcome, TErr>,
 {
@@ -56,7 +57,10 @@ impl<TCtx, TIntent, TOutcome, TErr, TChain> Pipeline<TCtx, TIntent, TOutcome, TE
 
     /// Alias using Sewing Machine Architecture terminology.
     #[inline(always)]
-    pub fn wrap<M>(self, middleware: M) -> Pipeline<TCtx, TIntent, TOutcome, TErr, StackNode<M, TChain>>
+    pub fn wrap<M>(
+        self,
+        middleware: M,
+    ) -> Pipeline<TCtx, TIntent, TOutcome, TErr, StackNode<M, TChain>>
     where
         M: Middleware<TCtx, TIntent, TOutcome, TErr>,
     {
@@ -72,7 +76,8 @@ pub trait PipelineChain<TCtx, TIntent, TOutcome, TErr> {
 }
 
 // 1. Base case: TerminalNode (Дно буквы U)
-impl<TCtx, TIntent, TOutcome, TErr, TTerm> PipelineChain<TCtx, TIntent, TOutcome, TErr> for TerminalNode<TTerm>
+impl<TCtx, TIntent, TOutcome, TErr, TTerm> PipelineChain<TCtx, TIntent, TOutcome, TErr>
+    for TerminalNode<TTerm>
 where
     TTerm: TerminalHandler<TCtx, TIntent, TOutcome, TErr>,
 {
@@ -125,4 +130,5 @@ where
 }
 
 /// Alias for `Pipeline` using Sewing Machine Architecture terminology.
-pub type Machine<TCtx, TIntent, TOutcome, TErr, TChain> = Pipeline<TCtx, TIntent, TOutcome, TErr, TChain>;
+pub type Machine<TCtx, TIntent, TOutcome, TErr, TChain> =
+    Pipeline<TCtx, TIntent, TOutcome, TErr, TChain>;

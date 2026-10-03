@@ -36,7 +36,10 @@ impl<T, TCtx, TIntent, TOutcome, TErr> Layer<TCtx, TIntent, TOutcome, TErr> for 
 }
 
 /// Alias for `TerminalHandler` using Sewing Machine Architecture terminology.
-pub trait Terminal<TCtx, TIntent, TOutcome, TErr>: TerminalHandler<TCtx, TIntent, TOutcome, TErr> {}
+pub trait Terminal<TCtx, TIntent, TOutcome, TErr>:
+    TerminalHandler<TCtx, TIntent, TOutcome, TErr>
+{
+}
 impl<T, TCtx, TIntent, TOutcome, TErr> Terminal<TCtx, TIntent, TOutcome, TErr> for T where
     T: TerminalHandler<TCtx, TIntent, TOutcome, TErr>
 {

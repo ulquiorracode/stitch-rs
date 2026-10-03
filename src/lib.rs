@@ -79,7 +79,9 @@ mod tests {
 
         fn on_exit(&self, ctx: &mut TestContext, outcome: &mut Result<u64, &'static str>) {
             match outcome {
-                Ok(new_val) => ctx.audit.push(alloc::format!("Success: new_val={}", new_val)),
+                Ok(new_val) => ctx
+                    .audit
+                    .push(alloc::format!("Success: new_val={}", new_val)),
                 Err(err) => ctx.audit.push(alloc::format!("Failed: reason={}", err)),
             }
         }
@@ -123,13 +125,26 @@ mod tests {
         assert_eq!(ctx.state, 35);
 
         // 2. Halted dispatch
-        let err = pipeline.dispatch(&mut ctx, MathIntent::Add(100)).unwrap_err();
+        let err = pipeline
+            .dispatch(&mut ctx, MathIntent::Add(100))
+            .unwrap_err();
         assert_eq!(err, "Addition exceeds allowed limit");
         assert_eq!(ctx.state, 35); // State untouched
 
-        // 3. Verify ascent telemetry
-        assert_eq!(ctx.audit.len(), 2);
+        // 3. Multiplication dispatch
+        let res_mul = pipeline
+            .dispatch(&mut ctx, MathIntent::Multiply(2))
+            .unwrap();
+        assert_eq!(res_mul, 70);
+        assert_eq!(ctx.state, 70);
+
+        // 4. Verify ascent telemetry
+        assert_eq!(ctx.audit.len(), 3);
         assert_eq!(ctx.audit[0], "Success: new_val=35");
-        assert_eq!(ctx.audit[1], "Failed: reason=Addition exceeds allowed limit");
+        assert_eq!(
+            ctx.audit[1],
+            "Failed: reason=Addition exceeds allowed limit"
+        );
+        assert_eq!(ctx.audit[2], "Success: new_val=70");
     }
 }
