@@ -1,0 +1,29 @@
+[package]
+name = "stitch-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Standalone Architecture-as-Code CLI binaries (`stitch` and `sma`) for Sewing Machine Architecture"
+keywords.workspace = true
+categories.workspace = true
+
+[[bin]]
+name = "stitch"
+path = "src/bin/stitch.rs"
+
+[[bin]]
+name = "sma"
+path = "src/bin/sma.rs"
+
+[dependencies]
+stitch-core = { workspace = true }
+lexopt = { workspace = true }
+syn = { workspace = true }
+quote = { workspace = true }
+rayon = { workspace = true }
+walkdir = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }

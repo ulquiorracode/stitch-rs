@@ -1,0 +1,202 @@
+//! # Stitch Core (`stitch-core`)
+//!
+//! Zero-Cost, Monomorphic U-Cycle Middleware Pipeline Framework implementing
+//! **The Sewing Machine Architecture (SMA)**.
+//!
+//! # Core Taxonomical Dimensions
+//! - **Operational Nodes**: [`Layer`], [`Terminal`], [`Pipeline`]
+//! - **Hexagonal Abstraction Boundaries**: [`Port`], [`Adapter`], [`Hub`]
+//! - **Memory & Scratchpads**: [`Blackboard`]
+//! - **Registration & Identification**: [`StitchToken`], [`StitchId`], [`RawToken`], [`RawId`]
+//! - **Domain Intent Accounting**: [`Entity`], [`ValueObject`], [`Event`], [`Data`]
+//! - **Flow Control**: [`FlowControl`], [`Admission`]
+
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
+
+pub mod blackboard;
+pub mod cqs;
+pub mod data;
+pub mod flow;
+pub mod hash;
+pub mod middleware;
+pub mod pipeline;
+pub mod taxonomy;
+pub mod token;
+
+pub use blackboard::Blackboard;
+pub use cqs::{Command, Query};
+pub use data::{Data, Entity, Event, ValueObject};
+pub use flow::{Admission, BlackboardFlow, FlowControl};
+pub use hash::{fnv1a_32, fnv1a_64};
+pub use middleware::{Layer, Middleware, Terminal, TerminalHandler};
+pub use pipeline::{Machine, Pipeline, PipelineChain, StackNode, TerminalNode};
+pub use taxonomy::{Adapter, Hub, Port};
+pub use token::{RawId, RawToken, StitchId, StitchToken};
+
+/// Common imports and contracts for Sewing Machine Architecture (SMA).
+pub mod prelude {
+    pub use crate::assert_blackboard_aligned;
+    pub use crate::blackboard::Blackboard;
+    pub use crate::cqs::{Command, Query};
+    pub use crate::data::{Data, Entity, Event, ValueObject};
+    pub use crate::flow::{Admission, BlackboardFlow, FlowControl};
+    pub use crate::hash::{fnv1a_32, fnv1a_64};
+    pub use crate::middleware::{Layer, Middleware, Terminal, TerminalHandler};
+    pub use crate::pipeline::{Machine, Pipeline, PipelineChain, StackNode, TerminalNode};
+    pub use crate::taxonomy::{Adapter, Hub, Port};
+    pub use crate::token::{RawId, RawToken, StitchId, StitchToken};
+}
+
+#[cfg(test)]
+mod tests {
+    use super::prelude::*;
+    use alloc::string::String;
+    use alloc::vec::Vec;
+
+    #[repr(C, align(64))]
+    struct TestBlackboard {
+        pub state: u64,
+        pub audit: Vec<String>,
+    }
+
+    impl Blackboard for TestBlackboard {}
+
+    enum MathIntent {
+        Add(u64),
+        Multiply(u64),
+    }
+
+    struct LimitGuardLayer {
+        max_delta: u64,
+    }
+
+    impl Layer<TestBlackboard, MathIntent, u64, &'static str> for LimitGuardLayer {
+        fn on_enter(
+            &self,
+            _ctx: &mut TestBlackboard,
+            intent: MathIntent,
+        ) -> FlowControl<MathIntent, u64, &'static str> {
+            match intent {
+                MathIntent::Add(val) if val > self.max_delta => {
+                    FlowControl::Halt("Addition exceeds allowed limit")
+                }
+                MathIntent::Multiply(val) if val > self.max_delta => {
+                    FlowControl::Halt("Multiplication exceeds allowed limit")
+                }
+                _ => FlowControl::Proceed(intent),
+            }
+        }
+
+        fn on_exit(&self, _ctx: &mut TestBlackboard, _outcome: &mut Result<u64, &'static str>) {}
+    }
+
+    struct AuditLayer;
+
+    impl Layer<TestBlackboard, MathIntent, u64, &'static str> for AuditLayer {
+        fn on_enter(
+            &self,
+            _ctx: &mut TestBlackboard,
+            intent: MathIntent,
+        ) -> FlowControl<MathIntent, u64, &'static str> {
+            FlowControl::Proceed(intent)
+        }
+
+        fn on_exit(&self, ctx: &mut TestBlackboard, outcome: &mut Result<u64, &'static str>) {
+            match outcome {
+                Ok(new_val) => ctx
+                    .audit
+                    .push(alloc::format!("Success: new_val={}", new_val)),
+                Err(err) => ctx.audit.push(alloc::format!("Failed: reason={}", err)),
+            }
+        }
+    }
+
+    struct MathTerminal;
+
+    impl Terminal<TestBlackboard, MathIntent, u64, &'static str> for MathTerminal {
+        fn execute(
+            &mut self,
+            ctx: &mut TestBlackboard,
+            intent: MathIntent,
+        ) -> Result<u64, &'static str> {
+            match intent {
+                MathIntent::Add(n) => {
+                    ctx.state += n;
+                    Ok(ctx.state)
+                }
+                MathIntent::Multiply(n) => {
+                    ctx.state *= n;
+                    Ok(ctx.state)
+                }
+            }
+        }
+    }
+
+    struct CacheShortCircuitLayer {
+        cached_result: u64,
+    }
+
+    impl Layer<TestBlackboard, MathIntent, u64, &'static str> for CacheShortCircuitLayer {
+        fn on_enter(
+            &self,
+            _ctx: &mut TestBlackboard,
+            intent: MathIntent,
+        ) -> FlowControl<MathIntent, u64, &'static str> {
+            match intent {
+                MathIntent::Add(0) => FlowControl::ShortCircuit(self.cached_result),
+                _ => FlowControl::Proceed(intent),
+            }
+        }
+
+        fn on_exit(&self, _ctx: &mut TestBlackboard, _outcome: &mut Result<u64, &'static str>) {}
+    }
+
+    #[test]
+    fn test_stitch_core_u_cycle() {
+        let mut ctx = TestBlackboard {
+            state: 10,
+            audit: Vec::new(),
+        };
+
+        let mut pipeline = Pipeline::on_terminal(MathTerminal)
+            .wrap(LimitGuardLayer { max_delta: 50 })
+            .wrap(CacheShortCircuitLayer { cached_result: 999 })
+            .wrap(AuditLayer);
+
+        // 1. Success dispatch
+        let res = pipeline.dispatch(&mut ctx, MathIntent::Add(25)).unwrap();
+        assert_eq!(res, 35);
+        assert_eq!(ctx.state, 35);
+
+        // 2. ShortCircuit dispatch (cache hit - terminal bypassed, but ascent audit triggered)
+        let res_cached = pipeline.dispatch(&mut ctx, MathIntent::Add(0)).unwrap();
+        assert_eq!(res_cached, 999);
+        assert_eq!(ctx.state, 35);
+
+        // 3. Halted dispatch
+        let err = pipeline
+            .dispatch(&mut ctx, MathIntent::Add(100))
+            .unwrap_err();
+        assert_eq!(err, "Addition exceeds allowed limit");
+        assert_eq!(ctx.state, 35);
+
+        // 4. Multiplication dispatch
+        let res_mul = pipeline
+            .dispatch(&mut ctx, MathIntent::Multiply(2))
+            .unwrap();
+        assert_eq!(res_mul, 70);
+        assert_eq!(ctx.state, 70);
+
+        // 5. Verify ascent telemetry across all executions
+        assert_eq!(ctx.audit.len(), 4);
+        assert_eq!(ctx.audit[0], "Success: new_val=35");
+        assert_eq!(ctx.audit[1], "Success: new_val=999");
+        assert_eq!(
+            ctx.audit[2],
+            "Failed: reason=Addition exceeds allowed limit"
+        );
+        assert_eq!(ctx.audit[3], "Success: new_val=70");
+    }
+}
