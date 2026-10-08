@@ -129,7 +129,18 @@ struct StructFinder {
 
 impl<'ast> Visit<'ast> for StructFinder {
     fn visit_item_struct(&mut self, i: &'ast ItemStruct) {
+        let struct_name = i.ident.to_string();
+        // Skip foreign C-ABI structs (universal convention _t / _s)
+        if struct_name.ends_with("_t") || struct_name.ends_with("_s") {
+            return;
+        }
+
         if let Fields::Named(named) = &i.fields {
+            // Skip structs with raw pointer fields (FFI interfaces)
+            if named.named.iter().any(|f| matches!(&f.ty, syn::Type::Ptr(_))) {
+                return;
+            }
+
             let mut current_offset = 0;
             let mut internal_holes = 0;
             let mut max_align = 1;
