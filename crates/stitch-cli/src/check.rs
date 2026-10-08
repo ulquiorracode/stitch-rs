@@ -98,6 +98,7 @@ impl<'a> CheckRunner<'a> {
             file_path: path,
             diagnostics: Vec::new(),
             in_hot_path_fn: false,
+            in_pipeline_impl: false,
         };
 
         visitor.visit_file(&syntax_tree);
@@ -157,6 +158,7 @@ struct AstScanner<'a> {
     file_path: &'a Path,
     diagnostics: Vec<Diagnostic>,
     in_hot_path_fn: bool,
+    in_pipeline_impl: bool,
 }
 
 impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
@@ -240,6 +242,14 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
     }
 
     fn visit_item_impl(&mut self, i: &'ast ItemImpl) {
+        let is_pipeline = has_attr(&i.attrs, "layer")
+            || has_attr(&i.attrs, "terminal")
+            || is_impl_of(i, "Layer")
+            || is_impl_of(i, "Terminal")
+            || is_impl_of(i, "PipelineChain")
+            || is_impl_of(i, "ChatLayer")
+            || is_impl_of(i, "TakeDamageLayer");
+
         if has_attr(&i.attrs, "layer") || is_impl_of(i, "Layer") {
             for item in &i.items {
                 if let syn::ImplItem::Fn(m) = item {
@@ -255,13 +265,20 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
                 }
             }
         }
+
+        let was_pipeline = self.in_pipeline_impl;
+        self.in_pipeline_impl = is_pipeline;
         syn::visit::visit_item_impl(self, i);
+        self.in_pipeline_impl = was_pipeline;
     }
 
     fn visit_impl_item_fn(&mut self, i: &'ast syn::ImplItemFn) {
         let fn_name = i.sig.ident.to_string();
         let was_hot = self.in_hot_path_fn;
-        if fn_name == "on_enter" || fn_name == "on_exit" || fn_name == "execute" {
+        if fn_name == "on_enter"
+            || fn_name == "on_exit"
+            || (self.in_pipeline_impl && fn_name == "execute")
+        {
             self.in_hot_path_fn = true;
         }
         syn::visit::visit_impl_item_fn(self, i);

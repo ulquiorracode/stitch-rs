@@ -177,16 +177,20 @@ impl Default for StitchConfig {
 }
 
 impl StitchConfig {
-    /// Loads configuration starting from `root_dir`, checking `stitch.toml`, `.stitch.toml`, or `Cargo.toml`.
+    /// Loads configuration starting from `root_dir`, traversing parent directories for `stitch.toml` or `.stitch.toml`.
     pub fn load(root_dir: &Path) -> Self {
-        let candidate_paths = [root_dir.join("stitch.toml"), root_dir.join(".stitch.toml")];
+        let mut curr = Some(root_dir);
+        while let Some(dir) = curr {
+            let candidate_paths = [dir.join("stitch.toml"), dir.join(".stitch.toml")];
 
-        for path in &candidate_paths {
-            if let Ok(content) = std::fs::read_to_string(path)
-                && let Ok(cfg) = toml::from_str::<StitchConfig>(&content)
-            {
-                return cfg;
+            for path in &candidate_paths {
+                if let Ok(content) = std::fs::read_to_string(path)
+                    && let Ok(cfg) = toml::from_str::<StitchConfig>(&content)
+                {
+                    return cfg;
+                }
             }
+            curr = dir.parent();
         }
 
         Self::default()
