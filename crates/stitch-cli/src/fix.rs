@@ -255,16 +255,23 @@ fn reorder_struct_in_source(content: &str, cand: &StructCandidate) -> Option<Str
                     ..
                 }) = &nv.value
             {
-                body.push_str(&format!("    ///{}\n", lit.value()));
+                let val = lit.value();
+                if val.starts_with(' ') {
+                    body.push_str(&format!("    ///{val}\n"));
+                } else {
+                    body.push_str(&format!("    /// {val}\n"));
+                }
                 continue;
             }
             let attr_tok = quote::quote!(#attr).to_string();
             body.push_str(&format!("    {attr_tok}\n"));
         }
 
-        let vis_tok = quote::quote!(#field.vis).to_string();
+        let vis = &field.vis;
+        let vis_tok = quote::quote!(#vis).to_string();
         let ident = field.ident.as_ref()?;
-        let ty_tok = quote::quote!(#field.ty).to_string();
+        let ty = &field.ty;
+        let ty_tok = quote::quote!(#ty).to_string();
 
         if vis_tok.is_empty() {
             body.push_str(&format!("    {ident}: {ty_tok},\n"));
