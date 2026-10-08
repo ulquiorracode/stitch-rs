@@ -110,7 +110,7 @@ impl<'a> HealthEngine<'a> {
 
         // 3. MECHANICAL SYMPATHY (SCROOGE)
         let total_struct_bytes: usize = struct_metrics.iter().map(|s| s.total_size).sum();
-        let total_waste_bytes: usize = struct_metrics.iter().map(|s| s.total_padding).sum();
+        let total_waste_bytes: usize = struct_metrics.iter().map(|s| s.preventable_padding).sum();
         let waste_ratio = if total_struct_bytes > 0 {
             total_waste_bytes as f64 / total_struct_bytes as f64
         } else {
@@ -131,12 +131,12 @@ impl<'a> HealthEngine<'a> {
                     category: "SCROOGE".to_string(),
                     impact_pct: waste_penalty * 100.0,
                     description: format!(
-                        "Padding waste: {total_waste_bytes} B across {} audited structs ({:.1}% memory overhead)",
+                        "Preventable padding waste: {total_waste_bytes} B across {} audited structs ({:.1}% memory overhead)",
                         struct_metrics.len(),
                         waste_ratio * 100.0
                     ),
                 });
-                recommendations.push("Reorder struct fields by descending alignment (align 8 -> align 4 -> align 2 -> align 1).".to_string());
+                recommendations.push("Reorder struct fields by descending alignment (align 8 -> align 4 -> align 2 -> align 1) or run `sma fix --scrooge`.".to_string());
             }
             if scrooge_violations > 0 {
                 penalties.push(HealthPenalty {

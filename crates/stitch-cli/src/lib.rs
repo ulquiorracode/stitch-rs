@@ -2,12 +2,14 @@
 
 pub mod check;
 pub mod config;
+pub mod fix;
 pub mod graph;
 pub mod health;
 pub mod metrics;
 
 use check::CheckRunner;
 use config::{RuleSeverity, StitchConfig};
+use fix::FixEngine;
 use graph::GraphExtractor;
 use health::HealthEngine;
 use metrics::MetricsAuditor;
@@ -23,6 +25,8 @@ pub fn run() -> Result<(), lexopt::Error> {
     let mut format = String::from("text");
     let mut output_file: Option<PathBuf> = None;
     let mut strict = false;
+    let mut dry_run = false;
+    let mut scrooge = false;
 
     while let Some(arg) = parser.next()? {
         match arg {
@@ -43,6 +47,12 @@ pub fn run() -> Result<(), lexopt::Error> {
             }
             Long("strict") => {
                 strict = true;
+            }
+            Long("dry-run") => {
+                dry_run = true;
+            }
+            Long("scrooge") => {
+                scrooge = true;
             }
             Long("help") | Short('h') => {
                 print_help();
@@ -217,6 +227,52 @@ pub fn run() -> Result<(), lexopt::Error> {
             println!("Audit completed across {} structs.", reports.len());
             Ok(())
         }
+        Some("fix") => {
+            let _ = scrooge; // Currently scrooge alignment is the primary automated fix
+            println!(
+                "==> Running Automated Architecture Fixer at `{}`...",
+                target_dir.display()
+            );
+            let engine = FixEngine::new(&target_dir);
+            let report = engine
+                .run_scrooge(dry_run)
+                .map_err(|e| lexopt::Error::Custom(Box::new(std::io::Error::other(e))))?;
+
+            if report.changes.is_empty() {
+                println!(
+                    "\n✅ All audited structs already adhere to optimal descending alignment. 0 bytes wasted."
+                );
+            } else {
+                let action = if dry_run { "PROPOSED" } else { "APPLIED" };
+                println!("\n{:=<80}", "");
+                println!("           AUTOMATED STRUCT ALIGNMENT (SCROOGE) REORDERING REPORT");
+                println!("{:=<80}", "");
+                println!(
+                    "  Status: {} fixes across {} structs",
+                    action,
+                    report.changes.len()
+                );
+                println!(
+                    "  Total Padding Eliminated: {} bytes\n",
+                    report.total_padding_saved
+                );
+
+                for ch in &report.changes {
+                    println!(
+                        "  • [STRUCT] {} ({}:{})",
+                        ch.struct_name,
+                        ch.file_path.display(),
+                        ch.line
+                    );
+                    println!(
+                        "    Declared Size: {} B -> {} B  |  Padding Eliminated: {} B",
+                        ch.declared_size_before, ch.declared_size_after, ch.padding_saved
+                    );
+                }
+                println!("{:=<80}\n", "");
+            }
+            Ok(())
+        }
         Some(cmd) => {
             eprintln!("Unknown subcommand `{}`.", cmd);
             print_help();
@@ -240,6 +296,7 @@ USAGE:
 SUBCOMMANDS:
     check       Fast pre-build AST scanner; validates SMA taxonomy, Scrooge rules, and boundaries.
     health      Evaluates multidimensional architecture health scorecard and quality index.
+    fix         Automated struct alignment and memory layout reordering (`--scrooge`).
     graph       Extracts architectural DAG; outputs Mermaid, Graphviz DOT, JSON, or interactive HTML.
     metrics     Audits L1D cache-line alignment, struct padding holes, and field ordering.
 
@@ -247,6 +304,8 @@ OPTIONS:
     -d, --dir <DIR>          Target workspace directory (default: current directory)
     -f, --format <FMT>       Output format for graph (text, json, mermaid, dot, html)
     -o, --output <FILE>      Write graph/metrics output to a specified file
+        --scrooge            Apply Scrooge struct alignment reordering
+        --dry-run            Simulate changes without writing files to disk
         --strict             Treat warnings as hard errors
     -h, --help               Print help information
     -V, --version            Print version information

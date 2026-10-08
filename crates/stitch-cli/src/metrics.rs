@@ -14,6 +14,7 @@ pub struct StructLayoutReport {
     pub total_size: usize,
     pub total_padding: usize,
     pub optimal_padding: usize,
+    pub preventable_padding: usize,
     pub crosses_cache_line: bool,
 }
 
@@ -49,7 +50,8 @@ impl<'a> MetricsAuditor<'a> {
                         && name != ".git"
                         && !name.starts_with('.')
                         && !path_str.contains("tests/ui")
-                        && !path_str.contains("tests\\ui"))
+                        && !path_str.contains("tests\\ui")
+                        && !name.ends_with("bindings_pregenerated.rs"))
             })
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"));
@@ -130,6 +132,8 @@ impl<'a, 'ast> Visit<'ast> for StructLayoutVisitor<'a> {
             let crosses_cache_line =
                 total_size > 64 || (current_offset / 64 != (current_offset.saturating_sub(1)) / 64);
 
+            let preventable_padding = total_padding.saturating_sub(optimal_padding);
+
             self.reports.push(StructLayoutReport {
                 name: i.ident.to_string(),
                 file: self.file_path.clone(),
@@ -138,6 +142,7 @@ impl<'a, 'ast> Visit<'ast> for StructLayoutVisitor<'a> {
                 total_size,
                 total_padding,
                 optimal_padding,
+                preventable_padding,
                 crosses_cache_line,
             });
         }
@@ -145,7 +150,7 @@ impl<'a, 'ast> Visit<'ast> for StructLayoutVisitor<'a> {
     }
 }
 
-fn estimate_size_align(ty: &Type) -> (usize, usize) {
+pub fn estimate_size_align(ty: &Type) -> (usize, usize) {
     match ty {
         Type::Path(p) => {
             let seg = p
