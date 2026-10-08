@@ -17,6 +17,9 @@
 pub use stitch_core::*;
 
 #[cfg(feature = "macros")]
+pub use stitch_macros::*;
+
+#[cfg(feature = "macros")]
 pub use stitch_macros as stitch;
 
 #[cfg(feature = "macros")]

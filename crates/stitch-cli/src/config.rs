@@ -230,6 +230,19 @@ impl StitchConfig {
 
         self.severity_for(rule_code)
     }
+
+    /// Determines if a file path belongs to a scope marked as `strict_hotpath`.
+    pub fn is_strict_hotpath(&self, path: &Path) -> bool {
+        let path_str = path.to_string_lossy();
+        for (pattern, scope) in &self.scopes {
+            if glob_match(pattern, &path_str) {
+                if let Some(strict) = scope.strict_hotpath {
+                    return strict;
+                }
+            }
+        }
+        false
+    }
 }
 
 pub fn canonical_rule_key(key: &str) -> &'static str {

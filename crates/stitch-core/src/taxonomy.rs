@@ -14,6 +14,8 @@
 /// - Pure Rust signatures; must never leak external vendor C-ABI types or pointers.
 pub trait Port: Send + Sync {}
 
+impl Port for () {}
+
 /// Suffix Contract: Must end in `Adapter`.
 ///
 /// Platform-specific or vendor-specific implementation of a `Port`.
@@ -22,7 +24,7 @@ pub trait Port: Send + Sync {}
 /// - Bridges external foreign runtimes (Metamod, ReAPI, Wasmtime, POSIX) to a safe Port trait.
 /// - Encapsulates all `unsafe` blocks, null pointer checks, and panic boundaries (`catch_unwind`).
 /// - Services and domain core logic must never depend directly on an `Adapter`.
-pub trait Adapter<P: Port + ?Sized>: Send + Sync {}
+pub trait Adapter<P: Port + ?Sized = ()>: Send + Sync {}
 
 /// Suffix Contract: Must end in `Hub`.
 ///

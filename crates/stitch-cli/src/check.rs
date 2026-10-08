@@ -97,6 +97,7 @@ impl<'a> CheckRunner<'a> {
             config: self.config,
             file_path: path,
             diagnostics: Vec::new(),
+            in_hot_path_fn: false,
         };
 
         visitor.visit_file(&syntax_tree);
@@ -155,6 +156,7 @@ struct AstScanner<'a> {
     config: &'a StitchConfig,
     file_path: &'a Path,
     diagnostics: Vec<Diagnostic>,
+    in_hot_path_fn: bool,
 }
 
 impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
@@ -256,6 +258,16 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
         syn::visit::visit_item_impl(self, i);
     }
 
+    fn visit_impl_item_fn(&mut self, i: &'ast syn::ImplItemFn) {
+        let fn_name = i.sig.ident.to_string();
+        let was_hot = self.in_hot_path_fn;
+        if fn_name == "on_enter" || fn_name == "on_exit" || fn_name == "execute" {
+            self.in_hot_path_fn = true;
+        }
+        syn::visit::visit_impl_item_fn(self, i);
+        self.in_hot_path_fn = was_hot;
+    }
+
     fn visit_expr_macro(&mut self, i: &'ast syn::ExprMacro) {
         let macro_name = i
             .mac
@@ -264,9 +276,8 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
             .last()
             .map(|s| s.ident.to_string())
             .unwrap_or_default();
-        if matches!(macro_name.as_str(), "format" | "vec" | "panic")
-            && self.file_path.to_string_lossy().contains("services")
-        {
+        let is_hotpath = self.in_hot_path_fn || self.config.is_strict_hotpath(self.file_path);
+        if is_hotpath && matches!(macro_name.as_str(), "format" | "vec" | "panic") {
             self.record(
                 "SMA-HOTPATH-020",
                 i.mac.path.span(),
