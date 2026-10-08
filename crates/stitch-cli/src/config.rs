@@ -16,6 +16,8 @@ pub struct StitchConfig {
     pub scopes: HashMap<String, ScopeConfig>,
     #[serde(default)]
     pub scrooge: ScroogeConfig,
+    #[serde(default)]
+    pub health: HealthConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,6 +139,80 @@ impl Default for ScroogeConfig {
     }
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct HealthConfig {
+    #[serde(default)]
+    pub weights: HealthWeights,
+    #[serde(default)]
+    pub thresholds: HealthThresholds,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthWeights {
+    #[serde(default = "default_weight_taxo")]
+    pub taxo: f64,
+    #[serde(default = "default_weight_dip")]
+    pub dip: f64,
+    #[serde(default = "default_weight_scrooge")]
+    pub scrooge: f64,
+    #[serde(default = "default_weight_hotpath")]
+    pub hotpath: f64,
+    #[serde(default = "default_weight_concur")]
+    pub concur: f64,
+}
+
+fn default_weight_taxo() -> f64 {
+    1.5
+}
+fn default_weight_dip() -> f64 {
+    2.5
+}
+fn default_weight_scrooge() -> f64 {
+    2.5
+}
+fn default_weight_hotpath() -> f64 {
+    3.0
+}
+fn default_weight_concur() -> f64 {
+    1.5
+}
+
+impl Default for HealthWeights {
+    fn default() -> Self {
+        Self {
+            taxo: default_weight_taxo(),
+            dip: default_weight_dip(),
+            scrooge: default_weight_scrooge(),
+            hotpath: default_weight_hotpath(),
+            concur: default_weight_concur(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthThresholds {
+    #[serde(default = "default_min_composite")]
+    pub min_composite: f64,
+    #[serde(default = "default_min_hotpath")]
+    pub min_hotpath: f64,
+}
+
+fn default_min_composite() -> f64 {
+    0.90
+}
+fn default_min_hotpath() -> f64 {
+    1.00
+}
+
+impl Default for HealthThresholds {
+    fn default() -> Self {
+        Self {
+            min_composite: default_min_composite(),
+            min_hotpath: default_min_hotpath(),
+        }
+    }
+}
+
 impl Default for StitchConfig {
     fn default() -> Self {
         let mut rules = HashMap::new();
@@ -172,6 +248,7 @@ impl Default for StitchConfig {
             boundaries: BoundariesConfig::default(),
             scopes: HashMap::new(),
             scrooge: ScroogeConfig::default(),
+            health: HealthConfig::default(),
         }
     }
 }
@@ -239,10 +316,10 @@ impl StitchConfig {
     pub fn is_strict_hotpath(&self, path: &Path) -> bool {
         let path_str = path.to_string_lossy();
         for (pattern, scope) in &self.scopes {
-            if glob_match(pattern, &path_str) {
-                if let Some(strict) = scope.strict_hotpath {
-                    return strict;
-                }
+            if glob_match(pattern, &path_str)
+                && let Some(strict) = scope.strict_hotpath
+            {
+                return strict;
             }
         }
         false

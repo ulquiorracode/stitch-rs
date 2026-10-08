@@ -37,6 +37,112 @@ impl Diagnostic {
         }
         out
     }
+
+    pub fn render_miette(&self) -> String {
+        let content = std::fs::read_to_string(&self.file).unwrap_or_default();
+        let (offset, len) = find_span_offset_len(&content, self.line, self.column);
+
+        let sev = match self.severity {
+            RuleSeverity::Deny => miette::Severity::Error,
+            RuleSeverity::Warn => miette::Severity::Warning,
+            RuleSeverity::Allow => return String::new(),
+        };
+
+        let diag = SmaMietteDiagnostic {
+            message: self.message.clone(),
+            code: self.code.clone(),
+            severity: sev,
+            help_text: self.help.clone(),
+            url: Some(format!(
+                "https://github.com/ulquiorracode/stitch-rs/blob/main/docs/diagnostics.md#{}",
+                self.code.to_lowercase()
+            )),
+            src: miette::NamedSource::new(self.file.display().to_string(), content),
+            span: (offset, len).into(),
+            label: self.message.clone(),
+        };
+
+        let mut out = String::new();
+        let handler = miette::GraphicalReportHandler::new();
+        if handler.render_report(&mut out, &diag).is_ok() {
+            out
+        } else {
+            self.render_rustc()
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("{message}")]
+pub struct SmaMietteDiagnostic {
+    pub message: String,
+    pub code: String,
+    pub severity: miette::Severity,
+    pub help_text: Option<String>,
+    pub url: Option<String>,
+    pub src: miette::NamedSource<String>,
+    pub span: miette::SourceSpan,
+    pub label: String,
+}
+
+impl miette::Diagnostic for SmaMietteDiagnostic {
+    fn code<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
+        Some(Box::new(&self.code))
+    }
+
+    fn severity(&self) -> Option<miette::Severity> {
+        Some(self.severity)
+    }
+
+    fn help<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
+        self.help_text
+            .as_ref()
+            .map(|h| Box::new(h) as Box<dyn std::fmt::Display>)
+    }
+
+    fn url<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
+        self.url
+            .as_ref()
+            .map(|u| Box::new(u) as Box<dyn std::fmt::Display>)
+    }
+
+    fn source_code(&self) -> Option<&dyn miette::SourceCode> {
+        Some(&self.src)
+    }
+
+    fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
+        let span = miette::LabeledSpan::new_with_span(Some(self.label.clone()), self.span);
+        Some(Box::new(std::iter::once(span)))
+    }
+}
+
+fn find_span_offset_len(content: &str, line: usize, col: usize) -> (usize, usize) {
+    let mut current_line = 1;
+    let mut current_col = 0;
+    let mut target_offset = 0;
+
+    for (idx, ch) in content.char_indices() {
+        if current_line == line && current_col >= col.saturating_sub(1) {
+            target_offset = idx;
+            break;
+        }
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 0;
+        } else {
+            current_col += 1;
+        }
+    }
+
+    let rest = &content[target_offset..];
+    let token_len = rest
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '!')
+        .map(|c| c.len_utf8())
+        .sum::<usize>();
+
+    let len = if token_len > 0 { token_len } else { 1 };
+    (target_offset, len)
 }
 
 pub struct CheckRunner<'a> {
@@ -125,7 +231,11 @@ impl<'a> CheckRunner<'a> {
                 Err(_) => continue,
             };
 
-            let pkg_name = match toml.get("package").and_then(|p| p.get("name")).and_then(|n| n.as_str()) {
+            let pkg_name = match toml
+                .get("package")
+                .and_then(|p| p.get("name"))
+                .and_then(|n| n.as_str())
+            {
                 Some(n) => n,
                 None => continue,
             };
@@ -145,20 +255,20 @@ impl<'a> CheckRunner<'a> {
                     _ => continue,
                 };
 
-                if from_crates.iter().any(|c| c == pkg_name) {
-                    if let Some(deps_table) = deps {
-                        for to_crate in to_crates {
-                            if deps_table.contains_key(to_crate) {
-                                diags.push(Diagnostic {
-                                    code: "SMA-BOUND-030".to_string(),
-                                    severity: RuleSeverity::Deny,
-                                    message: format!("Dependency Inversion Violation: Crate `{pkg_name}` directly references adapter crate `{to_crate}` in Cargo.toml."),
-                                    help: Some("Core and Port crates must remain purely abstract without vendor FFI adapter dependencies.".to_string()),
-                                    file: manifest_path.to_path_buf(),
-                                    line: 1,
-                                    column: 1,
-                                });
-                            }
+                if from_crates.iter().any(|c| c == pkg_name)
+                    && let Some(deps_table) = deps
+                {
+                    for to_crate in to_crates {
+                        if deps_table.contains_key(to_crate) {
+                            diags.push(Diagnostic {
+                                code: "SMA-BOUND-030".to_string(),
+                                severity: RuleSeverity::Deny,
+                                message: format!("Dependency Inversion Violation: Crate `{pkg_name}` directly references adapter crate `{to_crate}` in Cargo.toml."),
+                                help: Some("Core and Port crates must remain purely abstract without vendor FFI adapter dependencies.".to_string()),
+                                file: manifest_path.to_path_buf(),
+                                line: 1,
+                                column: 1,
+                            });
                         }
                     }
                 }

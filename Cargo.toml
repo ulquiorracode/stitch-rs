@@ -33,6 +33,7 @@ toml = "0.8"
 rayon = "1.10"
 walkdir = "2.5"
 trybuild = "1.0"
+miette = { version = "7.5", features = ["fancy"] }
 
 [package]
 name = "stitch-rs"

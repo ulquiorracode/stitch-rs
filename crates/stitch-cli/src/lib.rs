@@ -3,11 +3,13 @@
 pub mod check;
 pub mod config;
 pub mod graph;
+pub mod health;
 pub mod metrics;
 
 use check::CheckRunner;
 use config::{RuleSeverity, StitchConfig};
 use graph::GraphExtractor;
+use health::HealthEngine;
 use metrics::MetricsAuditor;
 use std::path::PathBuf;
 
@@ -68,19 +70,27 @@ pub fn run() -> Result<(), lexopt::Error> {
             let mut error_count = 0;
             let mut warn_count = 0;
 
+            let use_rustc_fmt = format == "rustc";
+
             for diag in &diagnostics {
+                let rendered = if use_rustc_fmt {
+                    diag.render_rustc()
+                } else {
+                    diag.render_miette()
+                };
+
                 match diag.severity {
                     RuleSeverity::Deny => {
                         error_count += 1;
-                        eprint!("{}", diag.render_rustc());
+                        eprint!("{rendered}");
                     }
                     RuleSeverity::Warn => {
                         warn_count += 1;
                         if strict {
                             error_count += 1;
-                            eprint!("{}", diag.render_rustc());
+                            eprint!("{rendered}");
                         } else {
-                            println!("{}", diag.render_rustc());
+                            println!("{rendered}");
                         }
                     }
                     RuleSeverity::Allow => {}
@@ -100,6 +110,44 @@ pub fn run() -> Result<(), lexopt::Error> {
                 );
                 Ok(())
             }
+        }
+        Some("health") => {
+            println!(
+                "==> Evaluating Multidimensional Architecture Health Scorecard at `{}`...",
+                target_dir.display()
+            );
+            let engine = HealthEngine::new(&config, &target_dir);
+            let report = engine.evaluate();
+
+            if format == "json" {
+                let json = serde_json::to_string_pretty(&report).unwrap_or_default();
+                if let Some(path) = output_file {
+                    std::fs::write(&path, &json).expect("failed to write health report");
+                    println!("Health report written to `{}`.", path.display());
+                } else {
+                    println!("{json}");
+                }
+            } else {
+                let text = report.render_terminal();
+                if let Some(path) = output_file {
+                    std::fs::write(&path, &text).expect("failed to write health report");
+                    println!("Health report written to `{}`.", path.display());
+                } else {
+                    print!("{text}");
+                }
+            }
+
+            if !report.passed && strict {
+                eprintln!(
+                    "\n❌ Architecture Health failed threshold: composite {:.1}% (min {:.1}%), hotpath {:.1}% (min {:.1}%).",
+                    report.composite_score,
+                    config.health.thresholds.min_composite * 100.0,
+                    report.dimensions.zero_alloc_hotpath.score_pct,
+                    config.health.thresholds.min_hotpath * 100.0
+                );
+                std::process::exit(1);
+            }
+            Ok(())
         }
         Some("graph") => {
             let extractor = GraphExtractor::new(&target_dir);
@@ -191,6 +239,7 @@ USAGE:
 
 SUBCOMMANDS:
     check       Fast pre-build AST scanner; validates SMA taxonomy, Scrooge rules, and boundaries.
+    health      Evaluates multidimensional architecture health scorecard and quality index.
     graph       Extracts architectural DAG; outputs Mermaid, Graphviz DOT, JSON, or interactive HTML.
     metrics     Audits L1D cache-line alignment, struct padding holes, and field ordering.
 

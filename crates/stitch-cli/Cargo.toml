@@ -28,3 +28,5 @@ walkdir = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
+miette = { workspace = true }
+thiserror = "2.0"
