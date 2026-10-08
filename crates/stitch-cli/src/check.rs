@@ -107,37 +107,59 @@ impl<'a> CheckRunner<'a> {
 
     fn check_boundaries(&self) -> Vec<Diagnostic> {
         let mut diags = Vec::new();
-        // Check for boundary violations across Cargo.toml files if configured
         let cargo_tomls = WalkDir::new(self.root_dir)
-            .max_depth(3)
+            .max_depth(4)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.file_name() == "Cargo.toml");
 
         for entry in cargo_tomls {
             let manifest_path = entry.path();
-            if let Ok(manifest_content) = std::fs::read_to_string(manifest_path) {
-                for forbidden in &self.config.boundaries.forbidden_dependencies {
-                    let from_pattern = &forbidden.from;
-                    let to_pattern = &forbidden.to;
+            let content = match std::fs::read_to_string(manifest_path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
 
-                    let manifest_str = manifest_path.to_string_lossy();
-                    if ((from_pattern == "core_crates"
-                        && (manifest_str.contains("core") || manifest_str.contains("api")))
-                        || (from_pattern == "port_crates" && manifest_str.contains("spi")))
-                        && to_pattern == "adapter_crates"
-                        && (manifest_content.contains("metamod")
-                            || manifest_content.contains("goldsrc-sys"))
-                    {
-                        diags.push(Diagnostic {
-                                code: "SMA-BOUND-030".to_string(),
-                                severity: RuleSeverity::Deny,
-                                message: format!("Dependency Inversion Violation: Crate at `{}` directly references adapter crate in Cargo.toml.", manifest_display(manifest_path)),
-                                help: Some("Core and Port crates must remain purely abstract without vendor FFI adapter dependencies.".to_string()),
-                                file: manifest_path.to_path_buf(),
-                                line: 1,
-                                column: 1,
-                            });
+            let toml: toml::Value = match toml::from_str(&content) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+
+            let pkg_name = match toml.get("package").and_then(|p| p.get("name")).and_then(|n| n.as_str()) {
+                Some(n) => n,
+                None => continue,
+            };
+
+            let deps = toml.get("dependencies").and_then(|d| d.as_table());
+
+            for forbidden in &self.config.boundaries.forbidden_dependencies {
+                let from_crates = match forbidden.from.as_str() {
+                    "core_crates" => &self.config.boundaries.core_crates,
+                    "port_crates" => &self.config.boundaries.port_crates,
+                    "service_crates" => &self.config.boundaries.service_crates,
+                    _ => continue,
+                };
+
+                let to_crates = match forbidden.to.as_str() {
+                    "adapter_crates" => &self.config.boundaries.adapter_crates,
+                    _ => continue,
+                };
+
+                if from_crates.iter().any(|c| c == pkg_name) {
+                    if let Some(deps_table) = deps {
+                        for to_crate in to_crates {
+                            if deps_table.contains_key(to_crate) {
+                                diags.push(Diagnostic {
+                                    code: "SMA-BOUND-030".to_string(),
+                                    severity: RuleSeverity::Deny,
+                                    message: format!("Dependency Inversion Violation: Crate `{pkg_name}` directly references adapter crate `{to_crate}` in Cargo.toml."),
+                                    help: Some("Core and Port crates must remain purely abstract without vendor FFI adapter dependencies.".to_string()),
+                                    file: manifest_path.to_path_buf(),
+                                    line: 1,
+                                    column: 1,
+                                });
+                            }
+                        }
                     }
                 }
             }
@@ -145,12 +167,6 @@ impl<'a> CheckRunner<'a> {
 
         diags
     }
-}
-
-fn manifest_display(p: &Path) -> String {
-    p.file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| p.display().to_string())
 }
 
 struct AstScanner<'a> {
