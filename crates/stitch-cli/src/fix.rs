@@ -48,6 +48,7 @@ impl<'a> FixEngine<'a> {
                         && !name.starts_with('.')
                         && !path_str.contains("tests/ui")
                         && !path_str.contains("tests\\ui")
+                        && !path_str.contains("goldsrc-sys")
                         && !name.ends_with("bindings_pregenerated.rs"))
             })
             .filter_map(|e| e.ok())
@@ -130,7 +131,7 @@ impl<'ast> Visit<'ast> for StructFinder {
     fn visit_item_struct(&mut self, i: &'ast ItemStruct) {
         if let Fields::Named(named) = &i.fields {
             let mut current_offset = 0;
-            let mut total_padding = 0;
+            let mut internal_holes = 0;
             let mut max_align = 1;
             let mut fields_with_align = Vec::new();
 
@@ -139,14 +140,13 @@ impl<'ast> Visit<'ast> for StructFinder {
                 max_align = max_align.max(align);
 
                 let pad = (align - (current_offset % align)) % align;
-                total_padding += pad;
+                internal_holes += pad;
                 current_offset += pad + size;
 
                 fields_with_align.push((field.clone(), size, align));
             }
 
             let tail_pad = (max_align - (current_offset % max_align)) % max_align;
-            total_padding += tail_pad;
             let total_size_before = current_offset + tail_pad;
 
             // Check if fields are already sorted by descending alignment
@@ -158,19 +158,20 @@ impl<'ast> Visit<'ast> for StructFinder {
                 sorted_fields.sort_by_key(|f| std::cmp::Reverse(f.2));
 
                 let mut opt_offset = 0;
-                let mut opt_padding = 0;
                 for (_, size, align) in &sorted_fields {
                     let pad = (align - (opt_offset % align)) % align;
-                    opt_padding += pad;
                     opt_offset += pad + size;
                 }
                 let opt_tail = (max_align - (opt_offset % max_align)) % max_align;
-                opt_padding += opt_tail;
                 let total_size_after = opt_offset + opt_tail;
 
-                let padding_saved = total_padding.saturating_sub(opt_padding);
+                let padding_saved = if total_size_before > total_size_after {
+                    total_size_before - total_size_after
+                } else {
+                    internal_holes
+                };
 
-                if padding_saved > 0 || total_size_before > total_size_after {
+                if padding_saved > 0 {
                     let sorted_syn_fields: Vec<syn::Field> =
                         sorted_fields.into_iter().map(|(f, _, _)| f).collect();
 
@@ -180,9 +181,7 @@ impl<'ast> Visit<'ast> for StructFinder {
                         fields: sorted_syn_fields,
                         declared_size_before: total_size_before,
                         declared_size_after: total_size_after,
-                        padding_saved: total_size_before
-                            .saturating_sub(total_size_after)
-                            .max(padding_saved),
+                        padding_saved,
                     });
                 }
             }
