@@ -2,72 +2,148 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Item, parse_macro_input};
+use syn::{parse_macro_input, Item, ItemStruct};
 
-macro_rules! define_passthrough_marker {
-    ($name:ident, $suffix:expr, $err_code:expr) => {
-        #[proc_macro_attribute]
-        pub fn $name(_args: TokenStream, input: TokenStream) -> TokenStream {
-            let item = parse_macro_input!(input as Item);
-            let ident_opt = match &item {
-                Item::Struct(s) => Some(&s.ident),
-                Item::Enum(e) => Some(&e.ident),
-                Item::Trait(t) => Some(&t.ident),
-                _ => None,
-            };
+mod rules;
+mod scrooge;
+mod taxonomy;
+mod visitor;
 
-            if let Some(ident) = ident_opt {
-                let name_str = ident.to_string();
-                if !name_str.ends_with($suffix) {
-                    let err = syn::Error::new(
-                        ident.span(),
-                        format!(
-                            "[{}] Suffix violation: Item `{}` decorated with #[stitch::{}] must have suffix `{}`.",
-                            $err_code, name_str, stringify!($name), $suffix
-                        ),
-                    );
-                    let compile_err = err.to_compile_error();
-                    return quote! {
-                        #compile_err
-                        #item
-                    }
-                    .into();
-                }
+use rules::*;
+use scrooge::*;
+use taxonomy::*;
+
+#[proc_macro_attribute]
+pub fn layer(_args: TokenStream, input: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(input as Item);
+    match &item {
+        Item::Struct(s) => {
+            if let Err(e) = verify_suffix(&s.ident, "Layer", SMA_TAXO_001) {
+                return e.to_compile_error().into();
             }
-
+            if let Err(e) = inspect_struct_fields(&s.fields) {
+                return e.to_compile_error().into();
+            }
             quote! { #item }.into()
         }
-    };
+        Item::Impl(item_impl) => {
+            if let Err(e) = verify_layer_impl(item_impl) {
+                return e.to_compile_error().into();
+            }
+            quote! { #item }.into()
+        }
+        _ => quote! { #item }.into(),
+    }
 }
 
-define_passthrough_marker!(layer, "Layer", "SMA-TAXO-001");
-define_passthrough_marker!(terminal, "Terminal", "SMA-TAXO-002");
-define_passthrough_marker!(port, "Port", "SMA-TAXO-003");
-define_passthrough_marker!(adapter, "Adapter", "SMA-TAXO-004");
-define_passthrough_marker!(hub, "Hub", "SMA-TAXO-005");
-define_passthrough_marker!(token, "Token", "SMA-TAXO-006");
-define_passthrough_marker!(id, "Id", "SMA-TAXO-007");
+#[proc_macro_attribute]
+pub fn terminal(_args: TokenStream, input: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(input as Item);
+    match &item {
+        Item::Struct(s) => {
+            if let Err(e) = verify_suffix(&s.ident, "Terminal", SMA_TAXO_002) {
+                return e.to_compile_error().into();
+            }
+            if let Err(e) = inspect_struct_fields(&s.fields) {
+                return e.to_compile_error().into();
+            }
+            quote! { #item }.into()
+        }
+        Item::Impl(item_impl) => {
+            if let Err(e) = verify_terminal_impl(item_impl) {
+                return e.to_compile_error().into();
+            }
+            quote! { #item }.into()
+        }
+        _ => quote! { #item }.into(),
+    }
+}
+
+#[proc_macro_attribute]
+pub fn port(_args: TokenStream, input: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(input as Item);
+    if let Item::Trait(t) = &item {
+        match verify_suffix(&t.ident, "Port", SMA_TAXO_003) {
+            Ok(()) => quote! { #item }.into(),
+            Err(e) => e.to_compile_error().into(),
+        }
+    } else {
+        quote! { #item }.into()
+    }
+}
+
+#[proc_macro_attribute]
+pub fn adapter(_args: TokenStream, input: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(input as Item);
+    if let Item::Struct(s) = &item {
+        match verify_suffix(&s.ident, "Adapter", SMA_TAXO_004) {
+            Ok(()) => quote! { #item }.into(),
+            Err(e) => e.to_compile_error().into(),
+        }
+    } else {
+        quote! { #item }.into()
+    }
+}
+
+#[proc_macro_attribute]
+pub fn hub(_args: TokenStream, input: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(input as Item);
+    if let Item::Struct(s) = &item {
+        if let Err(e) = verify_suffix(&s.ident, "Hub", SMA_TAXO_005) {
+            return e.to_compile_error().into();
+        }
+        if let Err(e) = inspect_struct_fields(&s.fields) {
+            return e.to_compile_error().into();
+        }
+    }
+    quote! { #item }.into()
+}
+
+#[proc_macro_attribute]
+pub fn token(_args: TokenStream, input: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(input as ItemStruct);
+    if let Err(e) = verify_suffix(&item.ident, "Token", SMA_TAXO_006) {
+        return e.to_compile_error().into();
+    }
+    if let Err(e) = verify_transparent(&item.attrs, item.ident.span()) {
+        return e.to_compile_error().into();
+    }
+    let assertion = synthesize_register_size_assertion(&item.ident);
+    quote! {
+        #item
+        #assertion
+    }
+    .into()
+}
+
+#[proc_macro_attribute]
+pub fn id(_args: TokenStream, input: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(input as ItemStruct);
+    if let Err(e) = verify_suffix(&item.ident, "Id", SMA_TAXO_007) {
+        return e.to_compile_error().into();
+    }
+    if let Err(e) = verify_transparent(&item.attrs, item.ident.span()) {
+        return e.to_compile_error().into();
+    }
+    let assertion = synthesize_register_size_assertion(&item.ident);
+    quote! {
+        #item
+        #assertion
+    }
+    .into()
+}
 
 #[proc_macro_attribute]
 pub fn blackboard(_args: TokenStream, input: TokenStream) -> TokenStream {
-    let item = parse_macro_input!(input as Item);
-    if let Item::Struct(s) = &item {
-        let name_str = s.ident.to_string();
-        if !name_str.ends_with("Context") && !name_str.ends_with("Blackboard") {
-            let err = syn::Error::new(
-                s.ident.span(),
-                format!(
-                    "[SMA-TAXO-008] Suffix violation: Struct `{}` decorated with #[stitch::blackboard] must have suffix `Context` or `Blackboard`.",
-                    name_str
-                ),
-            );
-            let compile_err = err.to_compile_error();
-            return quote! {
-                #compile_err
-                #item
-            }
-            .into();
-        }
+    let item = parse_macro_input!(input as ItemStruct);
+    if let Err(e) = verify_blackboard_suffix(&item.ident) {
+        return e.to_compile_error().into();
+    }
+    if let Err(e) = verify_cache_alignment(&item.attrs, item.ident.span()) {
+        return e.to_compile_error().into();
+    }
+    if let Err(e) = inspect_struct_fields(&item.fields) {
+        return e.to_compile_error().into();
     }
     quote! { #item }.into()
 }
@@ -81,13 +157,27 @@ pub fn entity(_args: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn value_object(_args: TokenStream, input: TokenStream) -> TokenStream {
     let item = parse_macro_input!(input as Item);
-    quote! { #item }.into()
+    if let Item::Struct(s) = &item {
+        match inspect_struct_fields(&s.fields) {
+            Ok(()) => quote! { #item }.into(),
+            Err(e) => e.to_compile_error().into(),
+        }
+    } else {
+        quote! { #item }.into()
+    }
 }
 
 #[proc_macro_attribute]
 pub fn event(_args: TokenStream, input: TokenStream) -> TokenStream {
     let item = parse_macro_input!(input as Item);
-    quote! { #item }.into()
+    if let Item::Struct(s) = &item {
+        match inspect_struct_fields(&s.fields) {
+            Ok(()) => quote! { #item }.into(),
+            Err(e) => e.to_compile_error().into(),
+        }
+    } else {
+        quote! { #item }.into()
+    }
 }
 
 #[proc_macro_attribute]
