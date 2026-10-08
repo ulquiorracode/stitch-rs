@@ -2,7 +2,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Item, ItemStruct};
+use syn::{Item, ItemStruct, parse_macro_input};
 
 mod rules;
 mod scrooge;

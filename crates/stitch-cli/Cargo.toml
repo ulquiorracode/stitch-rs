@@ -22,6 +22,7 @@ stitch-core = { workspace = true }
 lexopt = { workspace = true }
 syn = { workspace = true }
 quote = { workspace = true }
+proc-macro2 = { workspace = true }
 rayon = { workspace = true }
 walkdir = { workspace = true }
 serde = { workspace = true }

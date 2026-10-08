@@ -52,13 +52,11 @@ pub mod prelude {
 #[cfg(test)]
 mod tests {
     use super::prelude::*;
-    use alloc::string::String;
-    use alloc::vec::Vec;
-
     #[repr(C, align(64))]
     struct TestBlackboard {
         pub state: u64,
-        pub audit: Vec<String>,
+        pub audit_len: usize,
+        pub audit: [&'static str; 4],
     }
 
     impl Blackboard for TestBlackboard {}
@@ -104,11 +102,15 @@ mod tests {
         }
 
         fn on_exit(&self, ctx: &mut TestBlackboard, outcome: &mut Result<u64, &'static str>) {
-            match outcome {
-                Ok(new_val) => ctx
-                    .audit
-                    .push(alloc::format!("Success: new_val={}", new_val)),
-                Err(err) => ctx.audit.push(alloc::format!("Failed: reason={}", err)),
+            if ctx.audit_len < ctx.audit.len() {
+                ctx.audit[ctx.audit_len] = match outcome {
+                    Ok(35) => "Success: 35",
+                    Ok(999) => "Success: 999",
+                    Ok(70) => "Success: 70",
+                    Ok(_) => "Success: other",
+                    Err(err) => *err,
+                };
+                ctx.audit_len += 1;
             }
         }
     }
@@ -157,7 +159,8 @@ mod tests {
     fn test_stitch_core_u_cycle() {
         let mut ctx = TestBlackboard {
             state: 10,
-            audit: Vec::new(),
+            audit_len: 0,
+            audit: [""; 4],
         };
 
         let mut pipeline = Pipeline::on_terminal(MathTerminal)
@@ -190,13 +193,10 @@ mod tests {
         assert_eq!(ctx.state, 70);
 
         // 5. Verify ascent telemetry across all executions
-        assert_eq!(ctx.audit.len(), 4);
-        assert_eq!(ctx.audit[0], "Success: new_val=35");
-        assert_eq!(ctx.audit[1], "Success: new_val=999");
-        assert_eq!(
-            ctx.audit[2],
-            "Failed: reason=Addition exceeds allowed limit"
-        );
-        assert_eq!(ctx.audit[3], "Success: new_val=70");
+        assert_eq!(ctx.audit_len, 4);
+        assert_eq!(ctx.audit[0], "Success: 35");
+        assert_eq!(ctx.audit[1], "Success: 999");
+        assert_eq!(ctx.audit[2], "Addition exceeds allowed limit");
+        assert_eq!(ctx.audit[3], "Success: 70");
     }
 }

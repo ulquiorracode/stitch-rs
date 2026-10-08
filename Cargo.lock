@@ -192,6 +192,7 @@ name = "stitch-cli"
 version = "0.2.0"
 dependencies = [
  "lexopt",
+ "proc-macro2",
  "quote",
  "rayon",
  "serde",
