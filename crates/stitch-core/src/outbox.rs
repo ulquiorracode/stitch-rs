@@ -94,12 +94,16 @@ mod tests {
         assert_eq!(outbox.push(ServerEvent::PlayerKilled(1)), Ok(()));
         assert_eq!(outbox.len(), 2);
 
-        let mut collected = Vec::new();
-        outbox.drain(|event| collected.push(event));
+        let mut collected: [Option<ServerEvent>; 4] = [None, None, None, None];
+        let mut count = 0;
+        outbox.drain(|event| {
+            collected[count] = Some(event);
+            count += 1;
+        });
 
-        assert_eq!(collected.len(), 2);
-        assert_eq!(collected[0], ServerEvent::PlayerSpawned(1));
-        assert_eq!(collected[1], ServerEvent::PlayerKilled(1));
+        assert_eq!(count, 2);
+        assert_eq!(collected[0], Some(ServerEvent::PlayerSpawned(1)));
+        assert_eq!(collected[1], Some(ServerEvent::PlayerKilled(1)));
         assert!(outbox.is_empty());
     }
 
