@@ -68,8 +68,16 @@ impl<TCtx: Blackboard, TIntent, TOutcome, TErr, TChain>
     }
 }
 
+use crate::sealed::Sealed;
+
+impl<TTerm> Sealed for TerminalNode<TTerm> {}
+impl<M, Inner> Sealed for StackNode<M, Inner> {}
+
 /// Trait implemented by the entire monomorphic stack (both layers and terminal).
-pub trait PipelineChain<TCtx: Blackboard, TIntent, TOutcome, TErr> {
+///
+/// This trait is sealed: only canonical SMA pipeline nodes ([`TerminalNode`] and [`StackNode`])
+/// can implement it, mathematically guaranteeing U-cycle descent and ascent invariants.
+pub trait PipelineChain<TCtx: Blackboard, TIntent, TOutcome, TErr>: Sealed {
     /// Performs the complete U-Cycle: descent through middleware,
     /// execution at terminal, and ascent back up.
     fn cycle(&mut self, ctx: &mut TCtx, intent: TIntent) -> Result<TOutcome, TErr>;
@@ -119,6 +127,7 @@ where
     /// Dispatches an intent through the entire pipeline: **Result = Pipeline::dispatch(Material, Intent)**.
     #[inline(always)]
     pub fn dispatch(&mut self, ctx: &mut TCtx, intent: TIntent) -> Result<TOutcome, TErr> {
+        let () = TCtx::ASSERT_CACHE_ALIGNED;
         self.chain.cycle(ctx, intent)
     }
 

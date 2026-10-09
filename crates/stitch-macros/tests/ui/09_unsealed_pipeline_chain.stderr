@@ -1,0 +1,23 @@
+error[E0277]: the trait bound `RogueNode: Sealed` is not satisfied
+  --> tests/ui/09_unsealed_pipeline_chain.rs:10:43
+   |
+10 | impl PipelineChain<MyCtx, (), (), ()> for RogueNode {
+   |                                           ^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `Sealed` is not implemented for `RogueNode`
+  --> tests/ui/09_unsealed_pipeline_chain.rs:8:1
+   |
+ 8 | struct RogueNode;
+   | ^^^^^^^^^^^^^^^^
+help: the following other types implement trait `Sealed`
+  --> $WORKSPACE/crates/stitch-core/src/pipeline.rs
+   |
+   | impl<TTerm> Sealed for TerminalNode<TTerm> {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `TerminalNode<TTerm>`
+   | impl<M, Inner> Sealed for StackNode<M, Inner> {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `StackNode<M, Inner>`
+note: required by a bound in `PipelineChain`
+  --> $WORKSPACE/crates/stitch-core/src/pipeline.rs
+   |
+   | pub trait PipelineChain<TCtx: Blackboard, TIntent, TOutcome, TErr>: Sealed {
+   |                                                                     ^^^^^^ required by this bound in `PipelineChain`

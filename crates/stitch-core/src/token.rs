@@ -11,12 +11,25 @@ use crate::hash::fnv1a_64;
 pub trait StitchToken:
     Copy + Clone + Eq + PartialEq + Ord + PartialOrd + core::hash::Hash + Send + Sync + 'static
 {
+    /// Asserts at compile time that this token type strictly satisfies the 8-byte register layout.
+    const ASSERT_REGISTER_LAYOUT: () = {
+        assert!(
+            core::mem::size_of::<Self>() == 8,
+            "SMA-SCROOGE-013: Token type must be strictly 8 bytes (64 bits)."
+        );
+        assert!(
+            core::mem::align_of::<Self>() == 8,
+            "SMA-SCROOGE-013: Token type must have 8-byte alignment."
+        );
+    };
+
     /// Returns the underlying raw 64-bit integer.
     fn raw_u64(&self) -> u64;
 
     /// Equivalent alias for `raw_u64()`.
     #[inline(always)]
     fn as_u64(&self) -> u64 {
+        let () = Self::ASSERT_REGISTER_LAYOUT;
         self.raw_u64()
     }
 }
@@ -30,12 +43,25 @@ pub trait StitchId:
     /// The inner Token type backing this domain Id.
     type Token: StitchToken;
 
+    /// Asserts at compile time that this Id type strictly satisfies the 8-byte register layout.
+    const ASSERT_REGISTER_LAYOUT: () = {
+        assert!(
+            core::mem::size_of::<Self>() == 8,
+            "SMA-SCROOGE-013: Id type must be strictly 8 bytes (64 bits)."
+        );
+        assert!(
+            core::mem::align_of::<Self>() == 8,
+            "SMA-SCROOGE-013: Id type must have 8-byte alignment."
+        );
+    };
+
     /// Returns the inner domain token.
     fn token(&self) -> Self::Token;
 
     /// Returns the raw 64-bit value of the underlying token.
     #[inline(always)]
     fn raw_u64(&self) -> u64 {
+        let () = Self::ASSERT_REGISTER_LAYOUT;
         self.token().raw_u64()
     }
 }
