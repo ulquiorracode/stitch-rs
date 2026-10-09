@@ -358,7 +358,7 @@ pub fn canonical_rule_key(key: &str) -> &'static str {
     }
 }
 
-fn glob_match(pattern: &str, path: &str) -> bool {
+pub fn glob_match(pattern: &str, path: &str) -> bool {
     let norm_path = path.replace('\\', "/");
     let norm_pat = pattern.replace('\\', "/");
 
@@ -372,5 +372,62 @@ fn glob_match(pattern: &str, path: &str) -> bool {
         norm_path.starts_with(prefix) || norm_path.contains(prefix)
     } else {
         norm_path.contains(&norm_pat)
+    }
+}
+
+/// Dynamic scope filter passed via CLI (`--scope`) to restrict analysis, graph, or fixes.
+#[derive(Debug, Clone, Default)]
+pub struct ScopeFilter {
+    pub raw: String,
+    pub patterns: Vec<String>,
+}
+
+impl ScopeFilter {
+    pub fn new(raw: &str) -> Self {
+        let patterns = raw
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        Self {
+            raw: raw.to_string(),
+            patterns,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.patterns.is_empty()
+    }
+
+    pub fn matches_path(&self, path: &Path) -> bool {
+        if self.patterns.is_empty() {
+            return true;
+        }
+        let path_str = path.to_string_lossy();
+        self.patterns.iter().any(|pat| glob_match(pat, &path_str))
+    }
+
+    pub fn matches_name(&self, name: &str) -> bool {
+        if self.patterns.is_empty() {
+            return true;
+        }
+        self.patterns
+            .iter()
+            .any(|pat| pat == name || glob_match(pat, name))
+    }
+
+    /// Checks if a file could potentially be relevant for this scope.
+    /// If patterns contain symbol-only names (e.g. "ChatContext"), any file might match,
+    /// but if patterns are path/glob-based (e.g. "services/*"), only matching paths are relevant.
+    pub fn is_file_relevant(&self, path: &Path) -> bool {
+        if self.patterns.is_empty() {
+            return true;
+        }
+        if self.matches_path(path) {
+            return true;
+        }
+        self.patterns.iter().all(|pat| {
+            !pat.contains('/') && !pat.contains('\\') && !pat.ends_with(".rs") && !pat.contains('*')
+        })
     }
 }

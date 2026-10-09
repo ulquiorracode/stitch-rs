@@ -3,6 +3,7 @@
 //! Reorders struct fields in descending alignment order (align 8 -> align 4 -> align 2 -> align 1),
 //! eliminating internal padding holes, reducing cache footprint, and optimizing memory layout.
 
+use crate::config::ScopeFilter;
 use crate::metrics::estimate_size_align;
 use std::path::{Path, PathBuf};
 use syn::visit::Visit;
@@ -27,11 +28,19 @@ pub struct FixReport {
 
 pub struct FixEngine<'a> {
     root_dir: &'a Path,
+    scope: Option<ScopeFilter>,
 }
 
 impl<'a> FixEngine<'a> {
     pub fn new(root_dir: &'a Path) -> Self {
-        Self { root_dir }
+        Self {
+            root_dir,
+            scope: None,
+        }
+    }
+
+    pub fn new_scoped(root_dir: &'a Path, scope: Option<ScopeFilter>) -> Self {
+        Self { root_dir, scope }
     }
 
     pub fn run_scrooge(&self, dry_run: bool) -> Result<FixReport, String> {
@@ -52,7 +61,14 @@ impl<'a> FixEngine<'a> {
                         && !name.ends_with("bindings_pregenerated.rs"))
             })
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"));
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"))
+            .filter(|e| {
+                if let Some(scope) = &self.scope {
+                    scope.is_file_relevant(e.path())
+                } else {
+                    true
+                }
+            });
 
         for entry in rust_files {
             let path = entry.path();
@@ -86,6 +102,14 @@ impl<'a> FixEngine<'a> {
                     continue;
                 }
 
+                if let Some(scope) = &self.scope
+                    && !scope.is_empty()
+                    && !scope.matches_path(path)
+                    && !scope.matches_name(&cand.name)
+                {
+                    continue;
+                }
+
                 if let Some(new_content) = reorder_struct_in_source(&modified_content, &cand) {
                     modified_content = new_content;
                     file_changed = true;
@@ -106,7 +130,11 @@ impl<'a> FixEngine<'a> {
                     .map_err(|e| format!("Failed to write to `{}`: {e}", path.display()))?;
 
                 // Format with rustfmt
-                let _ = std::process::Command::new("rustfmt").arg(path).status();
+                let _ = std::process::Command::new("rustfmt")
+                    .arg("--edition")
+                    .arg("2024")
+                    .arg(path)
+                    .status();
             }
         }
 
@@ -137,7 +165,11 @@ impl<'ast> Visit<'ast> for StructFinder {
 
         if let Fields::Named(named) = &i.fields {
             // Skip structs with raw pointer fields (FFI interfaces)
-            if named.named.iter().any(|f| matches!(&f.ty, syn::Type::Ptr(_))) {
+            if named
+                .named
+                .iter()
+                .any(|f| matches!(&f.ty, syn::Type::Ptr(_)))
+            {
                 return;
             }
 

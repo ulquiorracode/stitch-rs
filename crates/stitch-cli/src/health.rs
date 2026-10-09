@@ -8,7 +8,7 @@
 //! - Re-entrancy & Receiver Safety ($S_{\text{CONCUR}}$)
 
 use crate::check::CheckRunner;
-use crate::config::StitchConfig;
+use crate::config::{ScopeFilter, StitchConfig};
 use crate::metrics::MetricsAuditor;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -18,6 +18,8 @@ pub struct HealthReport {
     pub composite_score: f64,
     pub grade: String,
     pub passed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
     pub dimensions: HealthDimensions,
     pub penalties: Vec<HealthPenalty>,
     pub recommendations: Vec<String>,
@@ -50,18 +52,35 @@ pub struct HealthPenalty {
 pub struct HealthEngine<'a> {
     config: &'a StitchConfig,
     root_dir: &'a Path,
+    scope: Option<ScopeFilter>,
 }
 
 impl<'a> HealthEngine<'a> {
     pub fn new(config: &'a StitchConfig, root_dir: &'a Path) -> Self {
-        Self { config, root_dir }
+        Self {
+            config,
+            root_dir,
+            scope: None,
+        }
+    }
+
+    pub fn new_scoped(
+        config: &'a StitchConfig,
+        root_dir: &'a Path,
+        scope: Option<ScopeFilter>,
+    ) -> Self {
+        Self {
+            config,
+            root_dir,
+            scope,
+        }
     }
 
     pub fn evaluate(&self) -> HealthReport {
-        let check_runner = CheckRunner::new(self.config, self.root_dir);
+        let check_runner = CheckRunner::new_scoped(self.config, self.root_dir, self.scope.clone());
         let diagnostics = check_runner.run();
 
-        let metrics_auditor = MetricsAuditor::new(self.root_dir);
+        let metrics_auditor = MetricsAuditor::new_scoped(self.root_dir, self.scope.clone());
         let struct_metrics = metrics_auditor.audit();
 
         let mut penalties = Vec::new();
@@ -224,6 +243,7 @@ impl<'a> HealthEngine<'a> {
             composite_score: composite_pct,
             grade,
             passed,
+            scope: self.scope.as_ref().map(|s| s.raw.clone()),
             dimensions: HealthDimensions {
                 taxonomy_purity: DimensionScore {
                     name: "Taxonomy Purity".to_string(),
@@ -279,9 +299,13 @@ impl HealthReport {
         );
         let status = if self.passed { "PASSED" } else { "FAILED" };
         out.push_str(&format!(
-            "  Overall Score: {:.1}% [Grade {}]  •  Status: {}\n\n",
+            "  Overall Score: {:.1}% [Grade {}]  •  Status: {}\n",
             self.composite_score, self.grade, status
         ));
+        if let Some(scope) = &self.scope {
+            out.push_str(&format!("  Active Scope:  `{}`\n", scope));
+        }
+        out.push('\n');
 
         out.push_str("  DIMENSIONS:\n");
         let dims = [

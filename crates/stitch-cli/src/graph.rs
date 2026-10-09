@@ -1,9 +1,11 @@
 //! Architectural DAG extraction and visualization engine implementing `stitch graph`.
 
+use crate::config::ScopeFilter;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::Path;
 use syn::visit::Visit;
-use syn::{ItemStruct, ItemTrait};
+use syn::{ItemImpl, ItemStruct, ItemTrait};
 use walkdir::WalkDir;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,11 +55,19 @@ impl Default for ArchitectureGraph {
 
 pub struct GraphExtractor<'a> {
     root_dir: &'a Path,
+    scope: Option<ScopeFilter>,
 }
 
 impl<'a> GraphExtractor<'a> {
     pub fn new(root_dir: &'a Path) -> Self {
-        Self { root_dir }
+        Self {
+            root_dir,
+            scope: None,
+        }
+    }
+
+    pub fn new_scoped(root_dir: &'a Path, scope: Option<ScopeFilter>) -> Self {
+        Self { root_dir, scope }
     }
 
     pub fn extract(&self) -> ArchitectureGraph {
@@ -88,6 +98,34 @@ impl<'a> GraphExtractor<'a> {
                     graph: &mut graph,
                 };
                 visitor.visit_file(&syntax_tree);
+            }
+        }
+
+        // Apply scope filter with 1-hop boundary context preservation
+        if let Some(scope) = &self.scope
+            && !scope.is_empty()
+        {
+            let direct_matches: HashSet<String> = graph
+                .nodes
+                .iter()
+                .filter(|n| scope.matches_path(Path::new(&n.file)) || scope.matches_name(&n.name))
+                .map(|n| n.id.clone())
+                .collect();
+
+            if !direct_matches.is_empty() {
+                let mut retained_ids = direct_matches.clone();
+                for edge in &graph.edges {
+                    if direct_matches.contains(&edge.source) {
+                        retained_ids.insert(edge.target.clone());
+                    }
+                    if direct_matches.contains(&edge.target) {
+                        retained_ids.insert(edge.source.clone());
+                    }
+                }
+                graph.nodes.retain(|n| retained_ids.contains(&n.id));
+                graph.edges.retain(|e| {
+                    retained_ids.contains(&e.source) && retained_ids.contains(&e.target)
+                });
             }
         }
 
@@ -148,6 +186,32 @@ impl<'a, 'ast> Visit<'ast> for NodeVisitor<'a> {
         }
         syn::visit::visit_item_trait(self, i);
     }
+
+    fn visit_item_impl(&mut self, i: &'ast ItemImpl) {
+        if let Some((_, trait_path, _)) = &i.trait_ {
+            let trait_name = trait_path
+                .segments
+                .last()
+                .map(|s| s.ident.to_string())
+                .unwrap_or_default();
+            let self_type_str = quote::quote!(#i.self_ty).to_string();
+            let self_clean = self_type_str
+                .split('<')
+                .next()
+                .unwrap_or(&self_type_str)
+                .trim()
+                .to_string();
+
+            if trait_name.ends_with("Port") {
+                self.graph.edges.push(GraphEdge {
+                    source: self_clean,
+                    target: trait_name,
+                    kind: "Implements".to_string(),
+                });
+            }
+        }
+        syn::visit::visit_item_impl(self, i);
+    }
 }
 
 impl ArchitectureGraph {
@@ -190,6 +254,17 @@ impl ArchitectureGraph {
             }
         }
         out.push_str("    end\n");
+
+        if !self.edges.is_empty() {
+            out.push_str("\n    %% Architectural Boundaries & Implementations\n");
+            for e in &self.edges {
+                out.push_str(&format!(
+                    "    {} -. \"{}\" .-> {}\n",
+                    e.source, e.kind, e.target
+                ));
+            }
+        }
+
         out.push_str("```\n");
         out
     }
@@ -203,6 +278,12 @@ impl ArchitectureGraph {
             out.push_str(&format!(
                 "    \"{}\" [label=\"{}\\n<{}>\"];\n",
                 n.id, n.name, n.role
+            ));
+        }
+        for e in &self.edges {
+            out.push_str(&format!(
+                "    \"{}\" -> \"{}\" [label=\"{}\", style=dashed];\n",
+                e.source, e.target, e.kind
             ));
         }
         out.push_str("}\n");

@@ -1,5 +1,4 @@
-//! Scrooge Systems Memory & Alignment Auditor implementing `stitch metrics`.
-
+use crate::config::ScopeFilter;
 use std::path::Path;
 use syn::visit::Visit;
 use syn::{Fields, ItemStruct, Type};
@@ -30,11 +29,19 @@ pub struct FieldMetric {
 
 pub struct MetricsAuditor<'a> {
     root_dir: &'a Path,
+    scope: Option<ScopeFilter>,
 }
 
 impl<'a> MetricsAuditor<'a> {
     pub fn new(root_dir: &'a Path) -> Self {
-        Self { root_dir }
+        Self {
+            root_dir,
+            scope: None,
+        }
+    }
+
+    pub fn new_scoped(root_dir: &'a Path, scope: Option<ScopeFilter>) -> Self {
+        Self { root_dir, scope }
     }
 
     pub fn audit(&self) -> Vec<StructLayoutReport> {
@@ -54,7 +61,14 @@ impl<'a> MetricsAuditor<'a> {
                         && !name.ends_with("bindings_pregenerated.rs"))
             })
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"));
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"))
+            .filter(|e| {
+                if let Some(scope) = &self.scope {
+                    scope.is_file_relevant(e.path())
+                } else {
+                    true
+                }
+            });
 
         for entry in rust_files {
             let path = entry.path();
@@ -67,6 +81,13 @@ impl<'a> MetricsAuditor<'a> {
                 };
                 visitor.visit_file(&syntax_tree);
             }
+        }
+
+        if let Some(scope) = &self.scope
+            && !scope.is_empty()
+        {
+            reports
+                .retain(|r| scope.matches_path(Path::new(&r.file)) || scope.matches_name(&r.name));
         }
 
         reports

@@ -1,6 +1,6 @@
 //! Architecture AST & Topology scanner implementing `stitch check`.
 
-use crate::config::{RuleSeverity, StitchConfig};
+use crate::config::{RuleSeverity, ScopeFilter, StitchConfig};
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use syn::spanned::Spanned;
@@ -148,11 +148,28 @@ fn find_span_offset_len(content: &str, line: usize, col: usize) -> (usize, usize
 pub struct CheckRunner<'a> {
     config: &'a StitchConfig,
     root_dir: &'a Path,
+    scope: Option<ScopeFilter>,
 }
 
 impl<'a> CheckRunner<'a> {
     pub fn new(config: &'a StitchConfig, root_dir: &'a Path) -> Self {
-        Self { config, root_dir }
+        Self {
+            config,
+            root_dir,
+            scope: None,
+        }
+    }
+
+    pub fn new_scoped(
+        config: &'a StitchConfig,
+        root_dir: &'a Path,
+        scope: Option<ScopeFilter>,
+    ) -> Self {
+        Self {
+            config,
+            root_dir,
+            scope,
+        }
     }
 
     pub fn run(&self) -> Vec<Diagnostic> {
@@ -184,6 +201,13 @@ impl<'a> CheckRunner<'a> {
             })
             .filter_map(|e| e.ok())
             .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"))
+            .filter(|e| {
+                if let Some(scope) = &self.scope {
+                    scope.is_file_relevant(e.path())
+                } else {
+                    true
+                }
+            })
             .map(|e| e.into_path())
             .collect()
     }
@@ -239,6 +263,14 @@ impl<'a> CheckRunner<'a> {
                 Some(n) => n,
                 None => continue,
             };
+
+            if let Some(scope) = &self.scope
+                && !scope.is_empty()
+                && !scope.matches_name(pkg_name)
+                && !scope.matches_path(manifest_path)
+            {
+                continue;
+            }
 
             let deps = toml.get("dependencies").and_then(|d| d.as_table());
 
