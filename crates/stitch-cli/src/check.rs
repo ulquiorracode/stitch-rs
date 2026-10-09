@@ -230,6 +230,7 @@ impl<'a> CheckRunner<'a> {
             diagnostics: Vec::new(),
             in_hot_path_fn: false,
             in_pipeline_impl: false,
+            in_test: false,
         };
 
         visitor.visit_file(&syntax_tree);
@@ -346,9 +347,30 @@ struct AstScanner<'a> {
     diagnostics: Vec<Diagnostic>,
     in_hot_path_fn: bool,
     in_pipeline_impl: bool,
+    in_test: bool,
 }
 
 impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
+    fn visit_item_mod(&mut self, i: &'ast syn::ItemMod) {
+        let is_cfg_test = i.ident == "tests" || has_cfg_test(&i.attrs);
+        let was_test = self.in_test;
+        if is_cfg_test {
+            self.in_test = true;
+        }
+        syn::visit::visit_item_mod(self, i);
+        self.in_test = was_test;
+    }
+
+    fn visit_item_fn(&mut self, i: &'ast syn::ItemFn) {
+        let is_test_fn = has_attr(&i.attrs, "test") || has_cfg_test(&i.attrs);
+        let was_test = self.in_test;
+        if is_test_fn {
+            self.in_test = true;
+        }
+        syn::visit::visit_item_fn(self, i);
+        self.in_test = was_test;
+    }
+
     fn visit_item_struct(&mut self, i: &'ast ItemStruct) {
         let ident_str = i.ident.to_string();
         let span = i.ident.span();
@@ -454,7 +476,19 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
         }
 
         // CQS Checks: Query & Command
-        if has_attr(&i.attrs, "query") || is_impl_of(i, "Query") {
+        let is_query_impl = has_attr(&i.attrs, "query") || is_impl_of(i, "Query");
+        let is_command_impl = has_attr(&i.attrs, "command") || is_impl_of(i, "Command");
+
+        if is_query_impl && is_command_impl {
+            self.record(
+                "SMA-CQS-051",
+                i.self_ty.span(),
+                "CQS Hybrid Violation: A type cannot implement both `Query` and `Command`. Keep intent read/write roles strictly segregated.".to_string(),
+                Some("Segregate read queries and mutating commands into separate distinct types.".to_string()),
+            );
+        }
+
+        if is_query_impl {
             for item in &i.items {
                 if let syn::ImplItem::Fn(m) = item {
                     let fn_name = m.sig.ident.to_string();
@@ -511,7 +545,8 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
             .last()
             .map(|s| s.ident.to_string())
             .unwrap_or_default();
-        let is_hotpath = self.in_hot_path_fn || self.config.is_strict_hotpath(self.file_path);
+        let is_hotpath =
+            !self.in_test && (self.in_hot_path_fn || self.config.is_strict_hotpath(self.file_path));
         if is_hotpath
             && matches!(
                 macro_name.as_str(),
@@ -543,7 +578,8 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
     }
 
     fn visit_expr_method_call(&mut self, i: &'ast syn::ExprMethodCall) {
-        let is_hotpath = self.in_hot_path_fn || self.config.is_strict_hotpath(self.file_path);
+        let is_hotpath =
+            !self.in_test && (self.in_hot_path_fn || self.config.is_strict_hotpath(self.file_path));
         if is_hotpath {
             let method_name = i.method.to_string();
             if matches!(
@@ -572,7 +608,8 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
     }
 
     fn visit_expr_call(&mut self, i: &'ast syn::ExprCall) {
-        let is_hotpath = self.in_hot_path_fn || self.config.is_strict_hotpath(self.file_path);
+        let is_hotpath =
+            !self.in_test && (self.in_hot_path_fn || self.config.is_strict_hotpath(self.file_path));
         if is_hotpath {
             let func_str = quote::quote!(#i.func).to_string();
             if func_str.contains("Box :: new")
@@ -737,6 +774,23 @@ impl<'a> AstScanner<'a> {
 fn has_attr(attrs: &[Attribute], name: &str) -> bool {
     attrs.iter().any(|a| {
         a.path().is_ident(name) || a.path().segments.last().is_some_and(|s| s.ident == name)
+    })
+}
+
+fn has_cfg_test(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|a| {
+        if a.path().is_ident("cfg") {
+            let mut is_test = false;
+            let _ = a.parse_nested_meta(|meta| {
+                if meta.path.is_ident("test") {
+                    is_test = true;
+                }
+                Ok(())
+            });
+            is_test
+        } else {
+            false
+        }
     })
 }
 

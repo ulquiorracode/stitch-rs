@@ -20,18 +20,24 @@ pub trait Query<TCtx, TResult, TErr> {
 /// If a context or entity uses interior mutability (`RefCell`, `Mutex`),
 /// mutation methods can demand `&mut CommandPermit` as a linear witness proof,
 /// making illegal interior mutations during queries impossible at compile time.
-pub struct CommandPermit<'a> {
-    _marker: core::marker::PhantomData<&'a mut ()>,
+pub struct CommandPermit<'a, TCtx: ?Sized> {
+    ctx: &'a mut TCtx,
 }
 
-impl<'a> CommandPermit<'a> {
-    /// Internal constructor to instantiate a permit for a mutating execution.
+impl<'a, TCtx: ?Sized> CommandPermit<'a, TCtx> {
+    /// Constructs a linear permit proving mutable execution context authority.
+    ///
+    /// Borrows the mutable context `&'a mut TCtx`, ensuring at most one active permit
+    /// exists and preventing overlapping permits under Rust's exclusive borrow rules.
     #[inline(always)]
-    #[allow(dead_code)]
-    pub(crate) fn new() -> Self {
-        Self {
-            _marker: core::marker::PhantomData,
-        }
+    pub fn new(ctx: &'a mut TCtx) -> Self {
+        Self { ctx }
+    }
+
+    /// Provides safe access to the mutable context through the permit witness.
+    #[inline(always)]
+    pub fn ctx_mut(&mut self) -> &mut TCtx {
+        self.ctx
     }
 }
 
@@ -42,9 +48,9 @@ pub trait PropRead<Target> {
 }
 
 /// Granular property write contract (fine-grained CQS).
-pub trait PropWrite<Target> {
-    /// Mutates the target with the given property value, requiring permission.
-    fn write(self, target: &mut Target);
+pub trait PropWrite<Target: ?Sized> {
+    /// Mutates the target with the given property value through an authorized permit.
+    fn write(self, permit: &mut CommandPermit<'_, Target>);
 }
 
 use crate::blackboard::Blackboard;
@@ -197,7 +203,7 @@ mod tests {
             self.val
         }
 
-        pub fn set_val(&mut self, _permit: &mut CommandPermit<'_>, new_val: u32) {
+        pub fn set_val(&mut self, new_val: u32) {
             self.val = new_val;
         }
     }
@@ -207,8 +213,10 @@ mod tests {
         let mut ctx = GuardedContext { val: 100 };
         assert_eq!(ctx.get_val(), 100);
 
-        let mut permit = CommandPermit::new();
-        ctx.set_val(&mut permit, 200);
+        {
+            let mut permit = CommandPermit::new(&mut ctx);
+            permit.ctx_mut().set_val(200);
+        }
         assert_eq!(ctx.get_val(), 200);
     }
 
@@ -221,8 +229,8 @@ mod tests {
     }
 
     impl PropWrite<MaterialContext> for CounterProp {
-        fn write(self, target: &mut MaterialContext) {
-            target.counter = self.0;
+        fn write(self, permit: &mut CommandPermit<'_, MaterialContext>) {
+            permit.ctx_mut().counter = self.0;
         }
     }
 
@@ -232,7 +240,10 @@ mod tests {
         let read = CounterProp::read(&ctx);
         assert_eq!(read.0, 50);
 
-        CounterProp(99).write(&mut ctx);
+        {
+            let mut permit = CommandPermit::new(&mut ctx);
+            CounterProp(99).write(&mut permit);
+        }
         assert_eq!(ctx.counter, 99);
     }
 }

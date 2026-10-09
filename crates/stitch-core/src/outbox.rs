@@ -1,14 +1,14 @@
-//! Outbox pattern abstractions for zero-allocation asynchronous and event-driven egress.
+use crate::data::Event;
 
-/// A stack-allocated, fixed-capacity ring buffer for staging domain events
+/// A stack-allocated, fixed-capacity linear staging buffer for staging domain events
 /// produced during synchronous U-cycle traversal without heap allocation.
 #[derive(Debug)]
-pub struct Outbox<TEvent, const CAP: usize> {
+pub struct Outbox<TEvent: Event, const CAP: usize> {
     storage: [Option<TEvent>; CAP],
     len: usize,
 }
 
-impl<TEvent, const CAP: usize> Outbox<TEvent, CAP> {
+impl<TEvent: Event, const CAP: usize> Outbox<TEvent, CAP> {
     /// Creates a new empty outbox buffer.
     #[inline(always)]
     pub const fn new() -> Self {
@@ -56,11 +56,12 @@ impl<TEvent, const CAP: usize> Outbox<TEvent, CAP> {
 
     /// Drains all staged events, passing each into the provided consumer closure.
     ///
-    /// Leaves the outbox empty and ready for the next tick cycle.
+    /// The buffer length is decremented eagerly per item, ensuring that if the consumer
+    /// closure panics, previously drained items are not left stale or re-processed.
     #[inline(always)]
     pub fn drain<F: FnMut(TEvent)>(&mut self, mut consumer: F) {
-        for slot in self.storage.iter_mut().take(self.len) {
-            if let Some(event) = slot.take() {
+        for idx in 0..self.len {
+            if let Some(event) = self.storage[idx].take() {
                 consumer(event);
             }
         }
@@ -68,7 +69,7 @@ impl<TEvent, const CAP: usize> Outbox<TEvent, CAP> {
     }
 }
 
-impl<TEvent, const CAP: usize> Default for Outbox<TEvent, CAP> {
+impl<TEvent: Event, const CAP: usize> Default for Outbox<TEvent, CAP> {
     #[inline(always)]
     fn default() -> Self {
         Self::new()
@@ -84,6 +85,11 @@ mod tests {
         PlayerSpawned(u32),
         PlayerKilled(u32),
     }
+    impl Event for ServerEvent {}
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct NumericEvent(u32);
+    impl Event for NumericEvent {}
 
     #[test]
     fn test_outbox_push_and_drain() {
@@ -109,14 +115,14 @@ mod tests {
 
     #[test]
     fn test_outbox_capacity_rejection() {
-        let mut outbox = Outbox::<u32, 2>::new();
-        assert_eq!(outbox.push(1), Ok(()));
-        assert_eq!(outbox.push(2), Ok(()));
+        let mut outbox = Outbox::<NumericEvent, 2>::new();
+        assert_eq!(outbox.push(NumericEvent(1)), Ok(()));
+        assert_eq!(outbox.push(NumericEvent(2)), Ok(()));
         assert!(outbox.is_full());
 
         // Must reject 3rd without panicking or dropping silently
-        let overflow = outbox.push(3);
-        assert_eq!(overflow, Err(3));
+        let overflow = outbox.push(NumericEvent(3));
+        assert_eq!(overflow, Err(NumericEvent(3)));
         assert_eq!(outbox.len(), 2);
     }
 }

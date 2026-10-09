@@ -119,15 +119,24 @@ impl<TCtx, TIntent, TOutcome, TErr> Layer<TCtx, TIntent, TOutcome, TErr>
 ///
 /// Traverses an array or slice of function pointers in a zero-alloc contiguous memory layout.
 /// Ideal for dynamically configured plugins where types cannot be known at compile time.
+///
+/// # Symmetrical U-Cycle & Clone Policy
+/// - `entered_count` tracks exactly how many layers completed descent (`on_enter`), guaranteeing
+///   that `on_exit` is executed strictly in reverse order for layers that were entered.
+/// - Requires `TIntent: Clone` because intent is forwarded down the dynamically-indexed slice.
 pub struct StatelessLayerTable<'a, TCtx, TIntent, TOutcome, TErr> {
     layers: &'a [StatelessLayer<TCtx, TIntent, TOutcome, TErr>],
+    entered_count: core::cell::Cell<usize>,
 }
 
 impl<'a, TCtx, TIntent, TOutcome, TErr> StatelessLayerTable<'a, TCtx, TIntent, TOutcome, TErr> {
     /// Constructs a new table wrapping a contiguous slice of stateless layers.
     #[inline(always)]
     pub const fn new(layers: &'a [StatelessLayer<TCtx, TIntent, TOutcome, TErr>]) -> Self {
-        Self { layers }
+        Self {
+            layers,
+            entered_count: core::cell::Cell::new(0),
+        }
     }
 }
 
@@ -141,7 +150,9 @@ where
         ctx: &mut TCtx,
         mut intent: TIntent,
     ) -> FlowControl<TIntent, TOutcome, TErr> {
-        for layer in self.layers {
+        self.entered_count.set(0);
+        for (idx, layer) in self.layers.iter().enumerate() {
+            self.entered_count.set(idx + 1);
             match (layer.on_enter_fn)(ctx, intent) {
                 FlowControl::Proceed(admitted) => {
                     intent = admitted;
@@ -158,9 +169,11 @@ where
     }
 
     fn on_exit(&self, ctx: &mut TCtx, outcome: &mut Result<TOutcome, TErr>) {
-        // Ascent in reverse order
-        for layer in self.layers.iter().rev() {
+        let count = self.entered_count.get();
+        // Ascent strictly in reverse order across entered layers only
+        for layer in self.layers[..count].iter().rev() {
             (layer.on_exit_fn)(ctx, outcome);
         }
+        self.entered_count.set(0);
     }
 }

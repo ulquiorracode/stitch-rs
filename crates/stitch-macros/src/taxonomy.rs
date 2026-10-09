@@ -69,6 +69,23 @@ pub fn verify_terminal_impl(item_impl: &ItemImpl) -> Result<()> {
 
 /// Verifies Query trait implementation: strictly immutable context `&TCtx` and no mutation statements.
 pub fn verify_query_impl(item_impl: &ItemImpl) -> Result<()> {
+    // SMA-CQS-051: Reject hybrid types implementing both Query and Command
+    if let Some((_, path, _)) = &item_impl.trait_ {
+        let trait_name = path
+            .segments
+            .last()
+            .map(|s| s.ident.to_string())
+            .unwrap_or_default();
+        if trait_name.contains("Command") {
+            return Err(Error::new(
+                item_impl.self_ty.span(),
+                format!(
+                    "[{SMA_CQS_051}] CQS Hybrid Violation: A type cannot implement both `Query` and `Command`. Keep intent read/write roles strictly segregated.",
+                ),
+            ));
+        }
+    }
+
     for item in &item_impl.items {
         if let ImplItem::Fn(method) = item {
             let fn_name = method.sig.ident.to_string();

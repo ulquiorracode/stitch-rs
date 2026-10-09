@@ -242,6 +242,9 @@ impl Default for StitchConfig {
 
         rules.insert("CONCUR-RECEIVER-MUT".to_string(), RuleSeverity::Deny);
 
+        rules.insert("CQS-QUERY-MUTATION".to_string(), RuleSeverity::Deny);
+        rules.insert("CQS-HYBRID-ROLE".to_string(), RuleSeverity::Deny);
+
         rules.insert("SMA-IO-001".to_string(), RuleSeverity::Deny);
         rules.insert("SMA-IO-002".to_string(), RuleSeverity::Deny);
         rules.insert("SMA-PARSE-001".to_string(), RuleSeverity::Deny);
@@ -424,6 +427,8 @@ pub fn canonical_rule_key(key: &str) -> &'static str {
         "SMA-BOUND-033" | "BOUND-COLOCATION" => "SMA-BOUND-033",
         "SMA-CONCUR-040" | "CONCUR-RECEIVER-MUT" => "SMA-CONCUR-040",
         "SMA-CONCUR-041" | "CONCUR-STATIC-MUT" => "SMA-CONCUR-041",
+        "SMA-CQS-050" | "CQS-QUERY-MUTATION" => "SMA-CQS-050",
+        "SMA-CQS-051" | "CQS-HYBRID-ROLE" => "SMA-CQS-051",
         "SMA-IO-001" | "IO-READ-ERROR" => "SMA-IO-001",
         "SMA-IO-002" | "IO-MANIFEST-ERROR" => "SMA-IO-002",
         "SMA-PARSE-001" | "PARSE-SYNTAX-ERROR" => "SMA-PARSE-001",
