@@ -20,7 +20,7 @@ pub mod flow;
 pub mod hash;
 pub mod middleware;
 pub mod pipeline;
-pub mod sealed;
+mod sealed;
 pub mod taxonomy;
 pub mod token;
 

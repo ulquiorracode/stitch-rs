@@ -5,9 +5,12 @@ use stitch_core::pipeline::PipelineChain;
 struct MyCtx;
 impl Blackboard for MyCtx {}
 
-struct RogueNode;
+struct KnowingAttacker;
 
-impl PipelineChain<MyCtx, (), (), ()> for RogueNode {
+// An adversary attempts to bypass the seal by importing the sealed trait directly
+impl stitch_core::sealed::Sealed for KnowingAttacker {}
+
+impl PipelineChain<MyCtx, (), (), ()> for KnowingAttacker {
     fn cycle(&mut self, _ctx: &mut MyCtx, _intent: ()) -> Result<(), ()> {
         Ok(())
     }
