@@ -4,12 +4,13 @@
 //! In release mode, the entire U-cycle (`on_enter` -> `terminal` -> `on_exit`)
 //! is fully inlined by LLVM into a single flat block of machine code.
 
+use crate::blackboard::Blackboard;
 use crate::flow::FlowControl;
 use crate::middleware::{Layer, Terminal};
 use core::marker::PhantomData;
 
 /// The compile-time monomorphic execution pipeline.
-pub struct Pipeline<TCtx, TIntent, TOutcome, TErr, TChain> {
+pub struct Pipeline<TCtx: Blackboard, TIntent, TOutcome, TErr, TChain> {
     chain: TChain,
     _phantom: PhantomData<(TCtx, TIntent, TOutcome, TErr)>,
 }
@@ -23,7 +24,7 @@ pub struct StackNode<M, Inner> {
     pub inner: Inner,
 }
 
-impl<TCtx, TIntent, TOutcome, TErr, TTerm>
+impl<TCtx: Blackboard, TIntent, TOutcome, TErr, TTerm>
     Pipeline<TCtx, TIntent, TOutcome, TErr, TerminalNode<TTerm>>
 where
     TTerm: Terminal<TCtx, TIntent, TOutcome, TErr>,
@@ -37,7 +38,9 @@ where
     }
 }
 
-impl<TCtx, TIntent, TOutcome, TErr, TChain> Pipeline<TCtx, TIntent, TOutcome, TErr, TChain> {
+impl<TCtx: Blackboard, TIntent, TOutcome, TErr, TChain>
+    Pipeline<TCtx, TIntent, TOutcome, TErr, TChain>
+{
     /// Wraps the current pipeline with an additional outer middleware layer.
     pub fn wrap<M>(self, layer: M) -> Pipeline<TCtx, TIntent, TOutcome, TErr, StackNode<M, TChain>>
     where
@@ -66,14 +69,14 @@ impl<TCtx, TIntent, TOutcome, TErr, TChain> Pipeline<TCtx, TIntent, TOutcome, TE
 }
 
 /// Trait implemented by the entire monomorphic stack (both layers and terminal).
-pub trait PipelineChain<TCtx, TIntent, TOutcome, TErr> {
+pub trait PipelineChain<TCtx: Blackboard, TIntent, TOutcome, TErr> {
     /// Performs the complete U-Cycle: descent through middleware,
     /// execution at terminal, and ascent back up.
     fn cycle(&mut self, ctx: &mut TCtx, intent: TIntent) -> Result<TOutcome, TErr>;
 }
 
 // 1. Base case: TerminalNode (Дно буквы U)
-impl<TCtx, TIntent, TOutcome, TErr, TTerm> PipelineChain<TCtx, TIntent, TOutcome, TErr>
+impl<TCtx: Blackboard, TIntent, TOutcome, TErr, TTerm> PipelineChain<TCtx, TIntent, TOutcome, TErr>
     for TerminalNode<TTerm>
 where
     TTerm: Terminal<TCtx, TIntent, TOutcome, TErr>,
@@ -85,9 +88,10 @@ where
 }
 
 // 2. Recursive case: Layer + Inner Stack
-impl<TCtx, TIntent, TOutcome, TErr, M, Inner> PipelineChain<TCtx, TIntent, TOutcome, TErr>
-    for StackNode<M, Inner>
+impl<TCtx: Blackboard, TIntent, TOutcome, TErr, M, Inner>
+    PipelineChain<TCtx, TIntent, TOutcome, TErr> for StackNode<M, Inner>
 where
+    TCtx: Blackboard,
     M: Layer<TCtx, TIntent, TOutcome, TErr>,
     Inner: PipelineChain<TCtx, TIntent, TOutcome, TErr>,
 {
@@ -97,17 +101,18 @@ where
         let mut outcome = match self.layer.on_enter(ctx, intent) {
             FlowControl::Proceed(admitted) => self.inner.cycle(ctx, admitted),
             FlowControl::ShortCircuit(early_outcome) => Ok(early_outcome),
-            FlowControl::Halt(err) => return Err(err),
+            FlowControl::Halt(err) => Err(err),
         };
 
-        // Phase 2: Ascent (Подъем)
+        // Phase 2: Ascent (Подъем) - halting layer and outer layers participate in ascent
         self.layer.on_exit(ctx, &mut outcome);
 
         outcome
     }
 }
 
-impl<TCtx, TIntent, TOutcome, TErr, TChain> Pipeline<TCtx, TIntent, TOutcome, TErr, TChain>
+impl<TCtx: Blackboard, TIntent, TOutcome, TErr, TChain>
+    Pipeline<TCtx, TIntent, TOutcome, TErr, TChain>
 where
     TChain: PipelineChain<TCtx, TIntent, TOutcome, TErr>,
 {
@@ -124,6 +129,7 @@ where
     }
 }
 
-/// Alias for `Pipeline` using Sewing Machine Architecture terminology.
+/// Compatibility alias for `Pipeline`. Prefer `Pipeline` in Sewing Machine Architecture.
+#[deprecated(since = "0.2.0", note = "Use `Pipeline` instead")]
 pub type Machine<TCtx, TIntent, TOutcome, TErr, TChain> =
     Pipeline<TCtx, TIntent, TOutcome, TErr, TChain>;

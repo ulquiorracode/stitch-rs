@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use syn::spanned::Spanned;
 use syn::visit::Visit;
-use syn::{Attribute, Fields, File, ItemImpl, ItemStruct, ItemTrait, Receiver, Type};
+use syn::{Attribute, Fields, File, ItemImpl, ItemStruct, ItemTrait, Receiver};
 use walkdir::WalkDir;
 
 #[derive(Debug, Clone)]
@@ -187,40 +187,41 @@ impl<'a> CheckRunner<'a> {
     }
 
     fn collect_rust_files(&self) -> Vec<PathBuf> {
-        WalkDir::new(self.root_dir)
-            .into_iter()
-            .filter_entry(|entry| {
-                let name = entry.file_name().to_string_lossy();
-                let path_str = entry.path().to_string_lossy();
-                entry.depth() == 0
-                    || (name != "target"
-                        && name != ".git"
-                        && !name.starts_with('.')
-                        && !path_str.contains("tests/ui")
-                        && !path_str.contains("tests\\ui"))
-            })
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"))
-            .filter(|e| {
-                if let Some(scope) = &self.scope {
-                    scope.is_file_relevant(e.path())
-                } else {
-                    true
-                }
-            })
-            .map(|e| e.into_path())
-            .collect()
+        crate::config::collect_rust_files(self.root_dir, self.scope.as_ref()).collect()
     }
 
     fn scan_file(&self, path: &Path) -> Vec<Diagnostic> {
         let content = match std::fs::read_to_string(path) {
             Ok(c) => c,
-            Err(_) => return Vec::new(),
+            Err(e) => {
+                return vec![Diagnostic {
+                    code: "SMA-IO-001".to_string(),
+                    severity: RuleSeverity::Deny,
+                    message: format!("Failed to read source file `{}`: {e}", path.display()),
+                    help: Some("Ensure file exists and has read permissions.".to_string()),
+                    file: path.to_path_buf(),
+                    line: 1,
+                    column: 1,
+                }];
+            }
         };
 
         let syntax_tree: File = match syn::parse_file(&content) {
             Ok(tree) => tree,
-            Err(_) => return Vec::new(),
+            Err(e) => {
+                let start = e.span().start();
+                return vec![Diagnostic {
+                    code: "SMA-PARSE-001".to_string(),
+                    severity: RuleSeverity::Deny,
+                    message: format!("Syntax error parsing `{}`: {e}", path.display()),
+                    help: Some(
+                        "Fix syntax errors before running architectural linting.".to_string(),
+                    ),
+                    file: path.to_path_buf(),
+                    line: start.line,
+                    column: start.column + 1,
+                }];
+            }
         };
 
         let mut visitor = AstScanner {
@@ -247,12 +248,40 @@ impl<'a> CheckRunner<'a> {
             let manifest_path = entry.path();
             let content = match std::fs::read_to_string(manifest_path) {
                 Ok(c) => c,
-                Err(_) => continue,
+                Err(e) => {
+                    diags.push(Diagnostic {
+                        code: "SMA-IO-002".to_string(),
+                        severity: RuleSeverity::Deny,
+                        message: format!(
+                            "Failed to read manifest `{}`: {e}",
+                            manifest_path.display()
+                        ),
+                        help: None,
+                        file: manifest_path.to_path_buf(),
+                        line: 1,
+                        column: 1,
+                    });
+                    continue;
+                }
             };
 
             let toml: toml::Value = match toml::from_str(&content) {
                 Ok(v) => v,
-                Err(_) => continue,
+                Err(e) => {
+                    diags.push(Diagnostic {
+                        code: "SMA-PARSE-002".to_string(),
+                        severity: RuleSeverity::Deny,
+                        message: format!(
+                            "Failed to parse Cargo manifest `{}`: {e}",
+                            manifest_path.display()
+                        ),
+                        help: None,
+                        file: manifest_path.to_path_buf(),
+                        line: 1,
+                        column: 1,
+                    });
+                    continue;
+                }
             };
 
             let pkg_name = match toml
@@ -443,19 +472,30 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
         self.in_hot_path_fn = was_hot;
     }
 
-    fn visit_expr_macro(&mut self, i: &'ast syn::ExprMacro) {
+    fn visit_macro(&mut self, i: &'ast syn::Macro) {
         let macro_name = i
-            .mac
             .path
             .segments
             .last()
             .map(|s| s.ident.to_string())
             .unwrap_or_default();
         let is_hotpath = self.in_hot_path_fn || self.config.is_strict_hotpath(self.file_path);
-        if is_hotpath && matches!(macro_name.as_str(), "format" | "vec" | "panic") {
+        if is_hotpath
+            && matches!(
+                macro_name.as_str(),
+                "format"
+                    | "vec"
+                    | "println"
+                    | "eprintln"
+                    | "panic"
+                    | "dbg"
+                    | "todo"
+                    | "unimplemented"
+            )
+        {
             self.record(
                 "SMA-HOTPATH-020",
-                i.mac.path.span(),
+                i.path.span(),
                 format!("Macro `{}!` allocates or panics in hot path.", macro_name),
                 Some(
                     "Use static fixed buffers or typed Error return instead of heap allocation."
@@ -463,7 +503,51 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
                 ),
             );
         }
-        syn::visit::visit_expr_macro(self, i);
+        syn::visit::visit_macro(self, i);
+    }
+
+    fn visit_expr_method_call(&mut self, i: &'ast syn::ExprMethodCall) {
+        let is_hotpath = self.in_hot_path_fn || self.config.is_strict_hotpath(self.file_path);
+        if is_hotpath {
+            let method_name = i.method.to_string();
+            if matches!(
+                method_name.as_str(),
+                "to_string" | "to_owned" | "clone_into"
+            ) {
+                self.record(
+                    "SMA-HOTPATH-021",
+                    i.method.span(),
+                    format!("Method call `.{method_name}()` incurs dynamic heap allocation in hot path."),
+                    Some("Avoid heap allocations on hot paths; pass borrowed slices or fixed-capacity buffers.".to_string()),
+                );
+            }
+        }
+        syn::visit::visit_expr_method_call(self, i);
+    }
+
+    fn visit_expr_call(&mut self, i: &'ast syn::ExprCall) {
+        let is_hotpath = self.in_hot_path_fn || self.config.is_strict_hotpath(self.file_path);
+        if is_hotpath {
+            let func_str = quote::quote!(#i.func).to_string();
+            if func_str.contains("Box :: new")
+                || func_str.contains("Arc :: new")
+                || func_str.contains("Rc :: new")
+                || func_str.contains("Vec :: new")
+                || func_str.contains("Vec :: with_capacity")
+                || func_str.contains("HashMap :: new")
+                || func_str.contains("BTreeMap :: new")
+                || func_str.contains("String :: from")
+                || func_str.contains("String :: new")
+            {
+                self.record(
+                    "SMA-HOTPATH-022",
+                    i.func.span(),
+                    format!("Heap constructor `{func_str}` is forbidden in hot path."),
+                    Some("Construct data statically or pre-allocate during initialization outside the U-cycle.".to_string()),
+                );
+            }
+        }
+        syn::visit::visit_expr_call(self, i);
     }
 }
 
@@ -487,23 +571,103 @@ impl<'a> AstScanner<'a> {
 
     fn check_heap_fields(&mut self, fields: &Fields, struct_name: &str) {
         for field in fields {
-            if let Type::Path(type_path) = &field.ty
-                && let Some(seg) = type_path.path.segments.last()
-            {
-                let name = seg.ident.to_string();
-                if self.config.scrooge.forbid_heap_types.contains(&name) {
-                    let field_name = field
-                        .ident
-                        .as_ref()
-                        .map_or_else(|| "<unnamed>".to_string(), |i| i.to_string());
-                    self.record(
-                        "SMA-SCROOGE-010",
-                        seg.ident.span(),
-                        format!("Prohibited heap-allocated type `{name}` in hot-path field `{struct_name}.{field_name}`."),
-                        Some("Use fixed-capacity array `[u8; N]`, ArrayString, or inline slice.".to_string()),
-                    );
+            let field_name = field
+                .ident
+                .as_ref()
+                .map_or_else(|| "<unnamed>".to_string(), |i| i.to_string());
+            self.check_field_type_recursive(&field.ty, struct_name, &field_name);
+        }
+    }
+
+    fn check_field_type_recursive(&mut self, ty: &syn::Type, struct_name: &str, field_name: &str) {
+        match ty {
+            syn::Type::Path(type_path) => {
+                for seg in &type_path.path.segments {
+                    let name = seg.ident.to_string();
+                    if self.config.scrooge.forbid_heap_types.contains(&name) {
+                        self.record(
+                            "SMA-SCROOGE-010",
+                            seg.ident.span(),
+                            format!(
+                                "Prohibited heap-allocated type `{name}` in hot-path field `{struct_name}.{field_name}`."
+                            ),
+                            Some(
+                                "Use fixed-capacity array `[u8; N]`, ArrayString, or inline slice."
+                                    .to_string(),
+                            ),
+                        );
+                    }
+                    match &seg.arguments {
+                        syn::PathArguments::AngleBracketed(args) => {
+                            for arg in &args.args {
+                                match arg {
+                                    syn::GenericArgument::Type(inner_ty) => {
+                                        self.check_field_type_recursive(
+                                            inner_ty,
+                                            struct_name,
+                                            field_name,
+                                        );
+                                    }
+                                    syn::GenericArgument::AssocType(assoc) => {
+                                        self.check_field_type_recursive(
+                                            &assoc.ty,
+                                            struct_name,
+                                            field_name,
+                                        );
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        syn::PathArguments::Parenthesized(paren) => {
+                            for input in &paren.inputs {
+                                self.check_field_type_recursive(input, struct_name, field_name);
+                            }
+                            if let syn::ReturnType::Type(_, output) = &paren.output {
+                                self.check_field_type_recursive(output, struct_name, field_name);
+                            }
+                        }
+                        syn::PathArguments::None => {}
+                    }
                 }
             }
+            syn::Type::Array(arr) => {
+                self.check_field_type_recursive(&arr.elem, struct_name, field_name);
+            }
+            syn::Type::Slice(slice) => {
+                self.check_field_type_recursive(&slice.elem, struct_name, field_name);
+            }
+            syn::Type::Tuple(tup) => {
+                for elem in &tup.elems {
+                    self.check_field_type_recursive(elem, struct_name, field_name);
+                }
+            }
+            syn::Type::Reference(r) => {
+                self.check_field_type_recursive(&r.elem, struct_name, field_name);
+            }
+            syn::Type::Ptr(p) => {
+                self.check_field_type_recursive(&p.elem, struct_name, field_name);
+            }
+            syn::Type::Paren(paren) => {
+                self.check_field_type_recursive(&paren.elem, struct_name, field_name);
+            }
+            syn::Type::Group(g) => {
+                self.check_field_type_recursive(&g.elem, struct_name, field_name);
+            }
+            syn::Type::TraitObject(_) | syn::Type::ImplTrait(_) => {
+                self.record(
+                    "SMA-SCROOGE-011",
+                    ty.span(),
+                    format!(
+                        "Trait object or dynamic dispatch detected in hot-path field `{struct_name}.{field_name}`."
+                    ),
+                    Some(
+                        "Replace dynamic dispatch with monomorphic generic parameters."
+                            .to_string(),
+                    ),
+                );
+            }
+            _ => {}
         }
     }
 }
@@ -571,4 +735,138 @@ fn is_receiver_mut(sig: &syn::Signature) -> bool {
             ..
         })
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scan_file_syntax_error_emits_parse_diagnostic() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("stitch_test_syntax_err_{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let bad_file = temp_dir.join("broken.rs");
+        std::fs::write(&bad_file, "pub struct Bad { invalid syntax here !!!").unwrap();
+
+        let cfg = StitchConfig::default();
+        let runner = CheckRunner::new(&cfg, &temp_dir);
+        let diags = runner.scan_file(&bad_file);
+        let _ = std::fs::remove_dir_all(&temp_dir);
+
+        assert!(
+            !diags.is_empty(),
+            "Corrupted file must produce diagnostics, not empty vec!"
+        );
+        assert!(
+            diags.iter().any(|d| d.code == "SMA-PARSE-001"),
+            "Expected SMA-PARSE-001"
+        );
+    }
+
+    #[test]
+    fn test_scan_file_missing_emits_io_diagnostic() {
+        let non_existent = Path::new("non_existent_never_file_12345.rs");
+        let cfg = StitchConfig::default();
+        let runner = CheckRunner::new(&cfg, Path::new("."));
+        let diags = runner.scan_file(non_existent);
+
+        assert!(!diags.is_empty());
+        assert!(
+            diags.iter().any(|d| d.code == "SMA-IO-001"),
+            "Expected SMA-IO-001"
+        );
+    }
+
+    #[test]
+    fn test_recursive_heap_ban_detects_nested_types() {
+        let code = r#"
+            #[stitch::layer]
+            pub struct NestedHeapLayer {
+                pub opt: Option<String>,
+                pub arr: [String; 4],
+                pub tup: (u8, Vec<u8>),
+                pub dyn_ref: &'static dyn std::fmt::Display,
+            }
+        "#;
+        let syntax_tree = syn::parse_file(code).unwrap();
+        let cfg = StitchConfig::default();
+        let mut visitor = AstScanner {
+            config: &cfg,
+            file_path: Path::new("test_nested.rs"),
+            diagnostics: Vec::new(),
+            in_hot_path_fn: false,
+            in_pipeline_impl: false,
+        };
+        visitor.visit_file(&syntax_tree);
+
+        let scrooge_010: Vec<_> = visitor
+            .diagnostics
+            .iter()
+            .filter(|d| d.code == "SMA-SCROOGE-010")
+            .collect();
+        let scrooge_011: Vec<_> = visitor
+            .diagnostics
+            .iter()
+            .filter(|d| d.code == "SMA-SCROOGE-011")
+            .collect();
+
+        assert_eq!(
+            scrooge_010.len(),
+            3,
+            "Expected Option<String>, [String; 4], (u8, Vec<u8>) to be caught"
+        );
+        assert_eq!(
+            scrooge_011.len(),
+            1,
+            "Expected dyn std::fmt::Display to be caught"
+        );
+    }
+
+    #[test]
+    fn test_hotpath_alloc_and_methods_detected() {
+        let code = r#"
+            pub struct TestLayer;
+            impl TestLayer {
+                pub fn on_enter(&self, ctx: &mut (), intent: ()) {
+                    let _ = Box::new(42);
+                    let _ = "hello".to_string();
+                    println!("alloc logging");
+                    todo!();
+                }
+            }
+        "#;
+        let syntax_tree = syn::parse_file(code).unwrap();
+        let cfg = StitchConfig::default();
+        let mut visitor = AstScanner {
+            config: &cfg,
+            file_path: Path::new("test_hotpath.rs"),
+            diagnostics: Vec::new(),
+            in_hot_path_fn: false,
+            in_pipeline_impl: false,
+        };
+        visitor.visit_file(&syntax_tree);
+
+        assert!(
+            visitor
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "SMA-HOTPATH-020"),
+            "Expected SMA-HOTPATH-020 for println/todo"
+        );
+        assert!(
+            visitor
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "SMA-HOTPATH-021"),
+            "Expected SMA-HOTPATH-021 for to_string"
+        );
+        assert!(
+            visitor
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "SMA-HOTPATH-022"),
+            "Expected SMA-HOTPATH-022 for Box::new"
+        );
+    }
 }

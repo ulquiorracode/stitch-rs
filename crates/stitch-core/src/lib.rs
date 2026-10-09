@@ -13,8 +13,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate alloc;
-
 pub mod blackboard;
 pub mod cqs;
 pub mod data;
@@ -26,12 +24,18 @@ pub mod taxonomy;
 pub mod token;
 
 pub use blackboard::Blackboard;
-pub use cqs::{Command, Query};
+pub use cqs::{Command, CommandExecutor, Query};
 pub use data::{Data, Entity, Event, ValueObject};
-pub use flow::{Admission, BlackboardFlow, FlowControl};
+pub use flow::FlowControl;
+#[allow(deprecated)]
+pub use flow::{Admission, BlackboardFlow};
 pub use hash::{fnv1a_32, fnv1a_64};
-pub use middleware::{Layer, Middleware, Terminal, TerminalHandler};
-pub use pipeline::{Machine, Pipeline, PipelineChain, StackNode, TerminalNode};
+pub use middleware::{Layer, Terminal};
+#[allow(deprecated)]
+pub use middleware::{Middleware, TerminalHandler};
+#[allow(deprecated)]
+pub use pipeline::Machine;
+pub use pipeline::{Pipeline, PipelineChain, StackNode, TerminalNode};
 pub use taxonomy::{Adapter, Hub, Port};
 pub use token::{RawId, RawToken, StitchId, StitchToken};
 
@@ -39,12 +43,18 @@ pub use token::{RawId, RawToken, StitchId, StitchToken};
 pub mod prelude {
     pub use crate::assert_blackboard_aligned;
     pub use crate::blackboard::Blackboard;
-    pub use crate::cqs::{Command, Query};
+    pub use crate::cqs::{Command, CommandExecutor, Query};
     pub use crate::data::{Data, Entity, Event, ValueObject};
-    pub use crate::flow::{Admission, BlackboardFlow, FlowControl};
+    pub use crate::flow::FlowControl;
+    #[allow(deprecated)]
+    pub use crate::flow::{Admission, BlackboardFlow};
     pub use crate::hash::{fnv1a_32, fnv1a_64};
-    pub use crate::middleware::{Layer, Middleware, Terminal, TerminalHandler};
-    pub use crate::pipeline::{Machine, Pipeline, PipelineChain, StackNode, TerminalNode};
+    pub use crate::middleware::{Layer, Terminal};
+    #[allow(deprecated)]
+    pub use crate::middleware::{Middleware, TerminalHandler};
+    #[allow(deprecated)]
+    pub use crate::pipeline::Machine;
+    pub use crate::pipeline::{Pipeline, PipelineChain, StackNode, TerminalNode};
     pub use crate::taxonomy::{Adapter, Hub, Port};
     pub use crate::token::{RawId, RawToken, StitchId, StitchToken};
 }
@@ -198,5 +208,39 @@ mod tests {
         assert_eq!(ctx.audit[1], "Success: 999");
         assert_eq!(ctx.audit[2], "Addition exceeds allowed limit");
         assert_eq!(ctx.audit[3], "Success: 70");
+    }
+
+    struct SelfAuditingHaltLayer;
+    impl Layer<TestBlackboard, MathIntent, u64, &'static str> for SelfAuditingHaltLayer {
+        fn on_enter(
+            &self,
+            _ctx: &mut TestBlackboard,
+            _intent: MathIntent,
+        ) -> FlowControl<MathIntent, u64, &'static str> {
+            FlowControl::Halt("Denied by SelfAuditingHaltLayer")
+        }
+
+        fn on_exit(&self, ctx: &mut TestBlackboard, outcome: &mut Result<u64, &'static str>) {
+            if let Err(err) = outcome {
+                ctx.audit[0] = *err;
+                ctx.audit_len = 1;
+            }
+        }
+    }
+
+    #[test]
+    fn test_outermost_halt_runs_own_on_exit() {
+        let mut ctx = TestBlackboard {
+            state: 0,
+            audit_len: 0,
+            audit: [""; 4],
+        };
+
+        let mut pipeline = Pipeline::on_terminal(MathTerminal).wrap(SelfAuditingHaltLayer);
+
+        let err = pipeline.dispatch(&mut ctx, MathIntent::Add(1)).unwrap_err();
+        assert_eq!(err, "Denied by SelfAuditingHaltLayer");
+        assert_eq!(ctx.audit_len, 1);
+        assert_eq!(ctx.audit[0], "Denied by SelfAuditingHaltLayer");
     }
 }

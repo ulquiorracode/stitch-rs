@@ -1,0 +1,5 @@
+error: [SMA-HOTPATH-022] Scrooge Violation: Heap constructor `Box :: new(123).func` is forbidden in hot path.
+ --> tests/ui/07_hotpath_methods_and_ctors.rs:8:17
+  |
+8 |         let _ = Box::new(123);
+  |                 ^^^

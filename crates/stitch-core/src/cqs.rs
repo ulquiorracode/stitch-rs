@@ -11,3 +11,19 @@ pub trait Query<TCtx, TResult> {
     /// Evaluates the read-only query against the material context.
     fn evaluate(&self, ctx: &TCtx) -> TResult;
 }
+
+use crate::middleware::Terminal;
+
+/// Terminal executor bridging any [`Command`] to terminate a monomorphic U-cycle pipeline.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CommandExecutor;
+
+impl<TCtx, C, TOutcome, TErr> Terminal<TCtx, C, TOutcome, TErr> for CommandExecutor
+where
+    C: Command<TCtx, TOutcome, TErr>,
+{
+    #[inline(always)]
+    fn execute(&mut self, ctx: &mut TCtx, command: C) -> Result<TOutcome, TErr> {
+        command.execute(ctx)
+    }
+}

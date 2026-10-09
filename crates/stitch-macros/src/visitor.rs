@@ -3,7 +3,7 @@
 use crate::rules::*;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
-use syn::{Error, ExprCall, ExprMacro, ExprMethodCall, ImplItemFn, Result};
+use syn::{Error, ExprCall, ExprMethodCall, ImplItemFn, Result};
 
 pub struct HotPathAstVisitor {
     pub violations: Vec<Error>,
@@ -36,9 +36,8 @@ impl Default for HotPathAstVisitor {
 }
 
 impl<'ast> Visit<'ast> for HotPathAstVisitor {
-    fn visit_expr_macro(&mut self, i: &'ast ExprMacro) {
+    fn visit_macro(&mut self, i: &'ast syn::Macro) {
         let macro_name = i
-            .mac
             .path
             .segments
             .last()
@@ -46,9 +45,10 @@ impl<'ast> Visit<'ast> for HotPathAstVisitor {
             .unwrap_or_default();
 
         match macro_name.as_str() {
-            "format" | "vec" | "println" | "eprintln" | "panic" | "dbg" => {
+            "format" | "vec" | "println" | "eprintln" | "panic" | "dbg" | "todo"
+            | "unimplemented" => {
                 self.violations.push(Error::new(
-                    i.mac.path.span(),
+                    i.path.span(),
                     format!(
                         "[{}] Scrooge Violation: Macro `{}!` performs heap allocations or I/O blocking inside hot path.",
                         SMA_HOTPATH_020, macro_name
@@ -57,7 +57,7 @@ impl<'ast> Visit<'ast> for HotPathAstVisitor {
             }
             _ => {}
         }
-        syn::visit::visit_expr_macro(self, i);
+        syn::visit::visit_macro(self, i);
     }
 
     fn visit_expr_method_call(&mut self, i: &'ast ExprMethodCall) {
@@ -84,6 +84,10 @@ impl<'ast> Visit<'ast> for HotPathAstVisitor {
             || func_str.contains("Rc :: new")
             || func_str.contains("Vec :: new")
             || func_str.contains("Vec :: with_capacity")
+            || func_str.contains("HashMap :: new")
+            || func_str.contains("BTreeMap :: new")
+            || func_str.contains("String :: from")
+            || func_str.contains("String :: new")
         {
             self.violations.push(Error::new(
                 i.func.span(),

@@ -16,61 +16,108 @@
 
 ## Overview
 
-`stitch-rs` implements **The Sewing Machine Architecture (SMA)**: a zero-allocation, monomorphic U-cycle processing pipeline. 
+`stitch-rs` implements **The Sewing Machine Architecture (SMA)**: a zero-allocation, monomorphic U-cycle processing pipeline.
 
 Unlike traditional dynamic middleware stacks (e.g. `Box<dyn Middleware>` or vector-based chain-of-responsibility), `stitch-rs` resolves the entire traversal order and state transitions **at compile time** through nested generic composition:
 
-```
-Request ─────────► [Layer A: on_enter] ──► [Layer B: on_enter] ──► [Terminal Handler]
-                                                                          │
-Response ◄──────── [Layer A: on_exit]  ◄── [Layer B: on_exit]  ◄──────────┘
-                              (The U-Cycle Traverse)
+```text
+Intent ─────────► [Layer A: on_enter] ──► [Layer B: on_enter] ──► [Terminal: execute]
+                                                                         │
+Outcome ◄─────── [Layer A: on_exit]  ◄── [Layer B: on_exit]  ◄─────────┘
+                               (The U-Cycle Traversal)
 ```
 
 ## Key Principles
 
-- **Zero-Cost Abstraction**: The execution pipeline unfolds into a static monomorphic chain with full inlining opportunities.
-- **Strict U-Cycle Flow**: Every middleware receives an immutable inspection or mutable step during the downward cycle (`on_enter`) and can intercept or transform the result on the upward cycle (`on_exit`).
-- **Short-Circuiting**: Middleware can signal `FlowControl::Halt` or `FlowControl::EarlyExit` to abort descending steps while ensuring proper unwinding of outer `on_exit` phases.
+- **Zero-Cost Abstraction**: The execution pipeline unfolds into a static monomorphic chain with full inlining opportunities and no dynamic dispatch (`Box<dyn ...>`).
+- **Strict U-Cycle Flow**: Every layer inspects or transforms the intent on descent (`on_enter`) and intercepts or annotates the outcome on ascent (`on_exit`).
+- **Symmetric Unwinding & Error Guarantees**: Signaling `FlowControl::Halt(err)` or `FlowControl::ShortCircuit(outcome)` halts further descent, while running `on_exit(ctx, &mut outcome)` for the halting layer and all outer enclosing layers during ascent.
+- **Scrooge Systems Mindset**: Cache-line alignment (`#[repr(C, align(64))]`), zero heap allocations on hot paths, and padding waste elimination.
 - **Clean CQS Separation**: Explicit separation between Queries and Commands across system boundaries.
-- **`no_std` Ready**: Compatible with embedded and kernel-adjacent environments without compulsory heap allocation.
+- **`no_std` Ready**: Core pipeline operates under `#![no_std]` without compulsory heap allocation.
 
 ## Usage
 
 ```rust
-use stitch_rs::pipeline::Pipeline;
-use stitch_rs::middleware::{Middleware, TerminalHandler};
-use stitch_rs::flow::FlowControl;
+use stitch_core::flow::FlowControl;
+use stitch_core::middleware::{Blackboard, Layer, Terminal};
+use stitch_core::pipeline::Pipeline;
+
+#[repr(C, align(64))]
+struct RequestContext {
+    user_id: u64,
+    authenticated: bool,
+}
+
+impl Blackboard for RequestContext {}
 
 struct AuthLayer;
-impl<Ctx, Req, Res, Err> Middleware<Ctx, Req, Res, Err> for AuthLayer {
-    fn on_enter(&self, _ctx: &mut Ctx, req: Req) -> FlowControl<Req, Res, Err> {
-        FlowControl::Proceed(req)
+
+impl Layer<RequestContext, &'static str, &'static str, &'static str> for AuthLayer {
+    fn on_enter(
+        &self,
+        ctx: &mut RequestContext,
+        intent: &'static str,
+    ) -> FlowControl<&'static str, &'static str, &'static str> {
+        if !ctx.authenticated {
+            FlowControl::Halt("Unauthorized")
+        } else {
+            FlowControl::Proceed(intent)
+        }
     }
 
-    fn on_exit(&self, _ctx: &mut Ctx, _res: &mut Result<Res, Err>) {
-        // Post-processing and ascent telemetry
+    fn on_exit(
+        &self,
+        _ctx: &mut RequestContext,
+        outcome: &mut Result<&'static str, &'static str>,
+    ) {
+        // Runs on both success and error/halt ascent
+        if let Err(err) = outcome {
+            // Telemetry / audit recording
+            let _ = err;
+        }
     }
 }
 
-struct CoreHandler;
-impl<Ctx, Req, Res: Default, Err> TerminalHandler<Ctx, Req, Res, Err> for CoreHandler {
-    fn execute(&mut self, _ctx: &mut Ctx, _req: Req) -> Result<Res, Err> {
-        Ok(Res::default())
+struct EchoTerminal;
+
+impl Terminal<RequestContext, &'static str, &'static str, &'static str> for EchoTerminal {
+    fn execute(
+        &mut self,
+        _ctx: &mut RequestContext,
+        intent: &'static str,
+    ) -> Result<&'static str, &'static str> {
+        Ok(intent)
     }
 }
 
 fn main() {
-    let mut pipeline = Pipeline::on_terminal(CoreHandler)
-        .use_middleware(AuthLayer);
+    let mut pipeline = Pipeline::on_terminal(EchoTerminal)
+        .wrap(AuthLayer);
 
-    let mut ctx = ();
-    let result = pipeline.dispatch(&mut ctx, ());
+    let mut ctx = RequestContext {
+        user_id: 42,
+        authenticated: true,
+    };
+
+    let outcome = pipeline.dispatch(&mut ctx, "ping");
+    assert_eq!(outcome, Ok("ping"));
 }
 ```
+
+## Tooling & Architecture-as-Code
+
+The workspace includes the `stitch` / `sma` CLI tool suite:
+
+- `stitch check`: Validates taxonomy rules, dependency boundaries, cache alignment, and hot-path heap allocations.
+- `stitch fix`: Automatically reorders struct fields by descending alignment to eliminate preventable padding waste.
+- `stitch metrics`: Measures struct sizes, cache line alignment, and memory efficiency.
+- `stitch health`: Computes an architectural health score across taxonomy purity, DIP, mechanical sympathy, zero-alloc hot paths, and re-entrancy.
+- `stitch graph`: Extracts the architectural DAG and exports to Mermaid, Graphviz DOT, or interactive HTML.
 
 ## License
 
 Licensed under either of:
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)

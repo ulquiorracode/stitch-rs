@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StitchConfig {
@@ -242,6 +242,11 @@ impl Default for StitchConfig {
 
         rules.insert("CONCUR-RECEIVER-MUT".to_string(), RuleSeverity::Deny);
 
+        rules.insert("SMA-IO-001".to_string(), RuleSeverity::Deny);
+        rules.insert("SMA-IO-002".to_string(), RuleSeverity::Deny);
+        rules.insert("SMA-PARSE-001".to_string(), RuleSeverity::Deny);
+        rules.insert("SMA-PARSE-002".to_string(), RuleSeverity::Deny);
+
         Self {
             workspace: WorkspaceConfig::default(),
             rules,
@@ -253,24 +258,79 @@ impl Default for StitchConfig {
     }
 }
 
+/// Errors occurring during configuration file discovery, reading, or parsing.
+#[derive(Debug)]
+pub enum ConfigError {
+    Io {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    Parse {
+        path: PathBuf,
+        source: toml::de::Error,
+    },
+}
+
+impl std::fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io { path, source } => {
+                write!(
+                    f,
+                    "Failed to read configuration file `{}`: {source}",
+                    path.display()
+                )
+            }
+            Self::Parse { path, source } => {
+                write!(
+                    f,
+                    "Failed to parse configuration file `{}`: {source}",
+                    path.display()
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for ConfigError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io { source, .. } => Some(source),
+            Self::Parse { source, .. } => Some(source),
+        }
+    }
+}
+
 impl StitchConfig {
     /// Loads configuration starting from `root_dir`, traversing parent directories for `stitch.toml` or `.stitch.toml`.
-    pub fn load(root_dir: &Path) -> Self {
+    ///
+    /// If a candidate configuration file is found, it is parsed strictly. If parsing or I/O fails,
+    /// a [`ConfigError`] is returned immediately (Strict Fail-Fast / Anti-Silent Error Suppression).
+    /// If no candidate file exists anywhere in the directory hierarchy, `Ok(Self::default())` is returned.
+    pub fn load(root_dir: &Path) -> Result<Self, ConfigError> {
         let mut curr = Some(root_dir);
         while let Some(dir) = curr {
             let candidate_paths = [dir.join("stitch.toml"), dir.join(".stitch.toml")];
 
             for path in &candidate_paths {
-                if let Ok(content) = std::fs::read_to_string(path)
-                    && let Ok(cfg) = toml::from_str::<StitchConfig>(&content)
-                {
-                    return cfg;
+                if path.exists() {
+                    let content = std::fs::read_to_string(path).map_err(|e| ConfigError::Io {
+                        path: path.clone(),
+                        source: e,
+                    })?;
+                    let cfg = toml::from_str::<StitchConfig>(&content).map_err(|e| {
+                        ConfigError::Parse {
+                            path: path.clone(),
+                            source: e,
+                        }
+                    })?;
+                    return Ok(cfg);
                 }
             }
             curr = dir.parent();
         }
 
-        Self::default()
+        Ok(Self::default())
     }
 
     /// Evaluates effective severity of a given rule code.
@@ -354,25 +414,76 @@ pub fn canonical_rule_key(key: &str) -> &'static str {
         "SMA-BOUND-033" | "BOUND-COLOCATION" => "SMA-BOUND-033",
         "SMA-CONCUR-040" | "CONCUR-RECEIVER-MUT" => "SMA-CONCUR-040",
         "SMA-CONCUR-041" | "CONCUR-STATIC-MUT" => "SMA-CONCUR-041",
+        "SMA-IO-001" | "IO-READ-ERROR" => "SMA-IO-001",
+        "SMA-IO-002" | "IO-MANIFEST-ERROR" => "SMA-IO-002",
+        "SMA-PARSE-001" | "PARSE-SYNTAX-ERROR" => "SMA-PARSE-001",
+        "SMA-PARSE-002" | "PARSE-MANIFEST-ERROR" => "SMA-PARSE-002",
         _ => "SMA-UNKNOWN",
     }
 }
 
 pub fn glob_match(pattern: &str, path: &str) -> bool {
-    let norm_path = path.replace('\\', "/");
     let norm_pat = pattern.replace('\\', "/");
+    let norm_path = path.replace('\\', "/");
 
-    if let Some(rest) = norm_pat.strip_prefix("**/") {
-        if let Some(core) = rest.strip_suffix("/**") {
-            norm_path.contains(core)
-        } else {
-            norm_path.ends_with(rest) || norm_path.contains(rest)
-        }
-    } else if let Some(prefix) = norm_pat.strip_suffix("/**") {
-        norm_path.starts_with(prefix) || norm_path.contains(prefix)
+    if norm_pat.contains('*') || norm_pat.contains('?') {
+        glob_match_recursive(norm_pat.as_bytes(), norm_path.as_bytes())
     } else {
         norm_path.contains(&norm_pat)
     }
+}
+
+fn glob_match_recursive(pat: &[u8], path: &[u8]) -> bool {
+    if pat.is_empty() {
+        return path.is_empty();
+    }
+
+    if pat.starts_with(b"**/") {
+        let rest_pat = &pat[3..];
+        if glob_match_recursive(rest_pat, path) {
+            return true;
+        }
+        for i in 0..path.len() {
+            if path[i] == b'/' && glob_match_recursive(rest_pat, &path[i + 1..]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if pat == b"**" {
+        return true;
+    }
+
+    if pat[0] == b'*' {
+        let rest_pat = &pat[1..];
+        for i in 0..=path.len() {
+            if i > 0 && path[i - 1] == b'/' {
+                break;
+            }
+            if glob_match_recursive(rest_pat, &path[i..]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if pat[0] == b'?' {
+        if path.is_empty() || path[0] == b'/' {
+            return false;
+        }
+        return glob_match_recursive(&pat[1..], &path[1..]);
+    }
+
+    if path.is_empty() {
+        return false;
+    }
+
+    if pat[0] == path[0] {
+        return glob_match_recursive(&pat[1..], &path[1..]);
+    }
+
+    false
 }
 
 /// Dynamic scope filter passed via CLI (`--scope`) to restrict analysis, graph, or fixes.
@@ -417,8 +528,6 @@ impl ScopeFilter {
     }
 
     /// Checks if a file could potentially be relevant for this scope.
-    /// If patterns contain symbol-only names (e.g. "ChatContext"), any file might match,
-    /// but if patterns are path/glob-based (e.g. "services/*"), only matching paths are relevant.
     pub fn is_file_relevant(&self, path: &Path) -> bool {
         if self.patterns.is_empty() {
             return true;
@@ -429,5 +538,88 @@ impl ScopeFilter {
         self.patterns.iter().all(|pat| {
             !pat.contains('/') && !pat.contains('\\') && !pat.ends_with(".rs") && !pat.contains('*')
         })
+    }
+}
+
+/// Reusable iterator discovering all relevant Rust source files in a workspace,
+/// filtering out build artifacts, tests/ui compile-fail suites, and applying the optional scope filter.
+pub fn collect_rust_files<'a>(
+    root_dir: &'a Path,
+    scope: Option<&'a ScopeFilter>,
+) -> impl Iterator<Item = PathBuf> + 'a {
+    walkdir::WalkDir::new(root_dir)
+        .into_iter()
+        .filter_entry(|entry| {
+            let name = entry.file_name().to_string_lossy();
+            let path_str = entry.path().to_string_lossy();
+            entry.depth() == 0
+                || (name != "target"
+                    && name != ".git"
+                    && !name.starts_with('.')
+                    && !path_str.contains("tests/ui")
+                    && !path_str.contains("tests\\ui")
+                    && !path_str.contains("goldsrc-sys")
+                    && !name.ends_with("bindings_pregenerated.rs"))
+        })
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"))
+        .filter(move |e| {
+            if let Some(scope) = scope {
+                scope.is_file_relevant(e.path())
+            } else {
+                true
+            }
+        })
+        .map(|e| e.into_path())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_glob_match_wildcards() {
+        assert!(glob_match("services/*", "services/chat"));
+        assert!(!glob_match("services/*", "services/chat/src/lib.rs"));
+        assert!(glob_match("services/**", "services/chat/src/lib.rs"));
+        assert!(glob_match("**/*.rs", "crates/stitch-cli/src/lib.rs"));
+        assert!(!glob_match("**/*.rs", "crates/stitch-cli/Cargo.toml"));
+        assert!(glob_match(
+            "crates/stitch-core",
+            "D:/Repo/stitch-rs/crates/stitch-core/src/lib.rs"
+        ));
+    }
+
+    #[test]
+    fn test_config_load_invalid_toml_fails_loudly() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("stitch_test_invalid_toml_{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let toml_path = temp_dir.join("stitch.toml");
+        std::fs::write(&toml_path, "[[rules = corrupt_syntax_error").unwrap();
+
+        let result = StitchConfig::load(&temp_dir);
+        let _ = std::fs::remove_dir_all(&temp_dir);
+
+        assert!(
+            result.is_err(),
+            "Invalid stitch.toml must return Err, never silent default!"
+        );
+        let err = result.unwrap_err();
+        assert!(matches!(err, ConfigError::Parse { .. }));
+    }
+
+    #[test]
+    fn test_config_load_missing_file_returns_default() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("stitch_test_missing_toml_{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let result = StitchConfig::load(&temp_dir);
+        let _ = std::fs::remove_dir_all(&temp_dir);
+
+        assert!(result.is_ok());
+        let cfg = result.unwrap();
+        assert_eq!(cfg.severity_for("SMA-TAXO-001"), RuleSeverity::Deny);
     }
 }

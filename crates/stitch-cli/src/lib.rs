@@ -231,7 +231,16 @@ pub fn run_check(target_dir: &Path, args: CheckArgs<'_>) -> Result<(), Box<dyn s
         println!("    Scope filter: `{}`", s.raw);
     }
 
-    let config = StitchConfig::load(target_dir);
+    let config = StitchConfig::load(target_dir)?;
+    if let Some(s) = &scope_filter {
+        if crate::config::collect_rust_files(target_dir, Some(s)).count() == 0 {
+            eprintln!(
+                "⚠️  Warning: Scope filter `{}` matched 0 files in `{}`.",
+                s.raw,
+                target_dir.display()
+            );
+        }
+    }
     let runner = CheckRunner::new_scoped(&config, target_dir, scope_filter);
     let mut diagnostics = runner.run();
 
@@ -324,7 +333,16 @@ pub fn run_health(
         target_dir.display()
     );
     let scope_filter = scope.map(ScopeFilter::new);
-    let config = StitchConfig::load(target_dir);
+    let config = StitchConfig::load(target_dir)?;
+    if let Some(s) = &scope_filter {
+        if crate::config::collect_rust_files(target_dir, Some(s)).count() == 0 {
+            eprintln!(
+                "⚠️  Warning: Scope filter `{}` matched 0 files in `{}`.",
+                s.raw,
+                target_dir.display()
+            );
+        }
+    }
     let engine = HealthEngine::new_scoped(&config, target_dir, scope_filter);
     let report = engine.evaluate();
 
@@ -444,7 +462,7 @@ pub fn run_fix(target_dir: &Path, args: FixArgs<'_>) -> Result<(), Box<dyn std::
         println!(
             "ℹ️  Taxonomy naming fixes require architectural confirmation. Running dry-run check..."
         );
-        let config = StitchConfig::load(target_dir);
+        let config = StitchConfig::load(target_dir)?;
         let runner = CheckRunner::new_scoped(&config, target_dir, scope_filter);
         let taxo_diags: Vec<_> = runner
             .run()

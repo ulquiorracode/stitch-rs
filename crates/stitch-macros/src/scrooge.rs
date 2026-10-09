@@ -16,7 +16,7 @@ pub fn inspect_struct_fields(fields: &Fields) -> Result<()> {
 fn inspect_type(ty: &Type, field_ident: Option<&Ident>) -> Result<()> {
     match ty {
         Type::Path(type_path) => {
-            if let Some(segment) = type_path.path.segments.last() {
+            for segment in &type_path.path.segments {
                 let type_name = segment.ident.to_string();
                 if FORBIDDEN_HEAP_TYPES.contains(&type_name.as_str()) {
                     let field_name =
@@ -29,9 +29,57 @@ fn inspect_type(ty: &Type, field_ident: Option<&Ident>) -> Result<()> {
                         ),
                     ));
                 }
+
+                match &segment.arguments {
+                    syn::PathArguments::AngleBracketed(args) => {
+                        for arg in &args.args {
+                            match arg {
+                                syn::GenericArgument::Type(inner_ty) => {
+                                    inspect_type(inner_ty, field_ident)?;
+                                }
+                                syn::GenericArgument::AssocType(assoc) => {
+                                    inspect_type(&assoc.ty, field_ident)?;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    syn::PathArguments::Parenthesized(paren) => {
+                        for input in &paren.inputs {
+                            inspect_type(input, field_ident)?;
+                        }
+                        if let syn::ReturnType::Type(_, output) = &paren.output {
+                            inspect_type(output, field_ident)?;
+                        }
+                    }
+                    syn::PathArguments::None => {}
+                }
             }
         }
-        Type::TraitObject(_) => {
+        Type::Array(arr) => {
+            inspect_type(&arr.elem, field_ident)?;
+        }
+        Type::Slice(slice) => {
+            inspect_type(&slice.elem, field_ident)?;
+        }
+        Type::Tuple(tup) => {
+            for elem in &tup.elems {
+                inspect_type(elem, field_ident)?;
+            }
+        }
+        Type::Reference(r) => {
+            inspect_type(&r.elem, field_ident)?;
+        }
+        Type::Ptr(p) => {
+            inspect_type(&p.elem, field_ident)?;
+        }
+        Type::Paren(paren) => {
+            inspect_type(&paren.elem, field_ident)?;
+        }
+        Type::Group(g) => {
+            inspect_type(&g.elem, field_ident)?;
+        }
+        Type::TraitObject(_) | Type::ImplTrait(_) => {
             return Err(syn::Error::new(
                 ty.span(),
                 format!(

@@ -1,12 +1,9 @@
-//! Architectural DAG extraction and visualization engine implementing `stitch graph`.
-
-use crate::config::ScopeFilter;
+use crate::config::{ScopeFilter, collect_rust_files};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
 use syn::visit::Visit;
 use syn::{ItemImpl, ItemStruct, ItemTrait};
-use walkdir::WalkDir;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArchitectureGraph {
@@ -73,24 +70,10 @@ impl<'a> GraphExtractor<'a> {
     pub fn extract(&self) -> ArchitectureGraph {
         let mut graph = ArchitectureGraph::default();
 
-        let rust_files = WalkDir::new(self.root_dir)
-            .into_iter()
-            .filter_entry(|entry| {
-                let name = entry.file_name().to_string_lossy();
-                let path_str = entry.path().to_string_lossy();
-                entry.depth() == 0
-                    || (name != "target"
-                        && name != ".git"
-                        && !name.starts_with('.')
-                        && !path_str.contains("tests/ui")
-                        && !path_str.contains("tests\\ui"))
-            })
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"));
+        let rust_files = collect_rust_files(self.root_dir, self.scope.as_ref());
 
-        for entry in rust_files {
-            let path = entry.path();
-            if let Ok(content) = std::fs::read_to_string(path)
+        for path in rust_files {
+            if let Ok(content) = std::fs::read_to_string(&path)
                 && let Ok(syntax_tree) = syn::parse_file(&content)
             {
                 let mut visitor = NodeVisitor {
@@ -194,7 +177,8 @@ impl<'a, 'ast> Visit<'ast> for NodeVisitor<'a> {
                 .last()
                 .map(|s| s.ident.to_string())
                 .unwrap_or_default();
-            let self_type_str = quote::quote!(#i.self_ty).to_string();
+            let self_ty = &i.self_ty;
+            let self_type_str = quote::quote!(#self_ty).to_string();
             let self_clean = self_type_str
                 .split('<')
                 .next()
@@ -320,5 +304,98 @@ impl ArchitectureGraph {
 </html>
 "#
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_graph_extract_and_renders() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("stitch_graph_test_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).expect("create temp dir");
+
+        let code = r#"
+pub trait LogPort {
+    fn log(&self, msg: &str);
+}
+
+pub struct StdoutAdapter;
+
+impl LogPort for StdoutAdapter {
+    fn log(&self, msg: &str) {}
+}
+
+pub struct AuthLayer;
+pub struct ExecTerminal;
+pub struct PacketBlackboard;
+"#;
+        fs::write(temp_dir.join("domain.rs"), code).expect("write temp source");
+
+        let extractor = GraphExtractor::new(&temp_dir);
+        let graph = extractor.extract();
+
+        let node_names: Vec<&str> = graph.nodes.iter().map(|n| n.name.as_str()).collect();
+        assert!(node_names.contains(&"LogPort"));
+        assert!(node_names.contains(&"StdoutAdapter"));
+        assert!(node_names.contains(&"AuthLayer"));
+        assert!(node_names.contains(&"ExecTerminal"));
+        assert!(node_names.contains(&"PacketBlackboard"));
+
+        assert_eq!(graph.edges.len(), 1);
+        assert_eq!(graph.edges[0].source, "StdoutAdapter");
+        assert_eq!(graph.edges[0].target, "LogPort");
+        assert_eq!(graph.edges[0].kind, "Implements");
+
+        let mermaid = graph.to_mermaid();
+        assert!(mermaid.contains("subgraph CoreDomain"));
+        assert!(mermaid.contains("LogPort"));
+        assert!(mermaid.contains("StdoutAdapter"));
+        assert!(mermaid.contains("AuthLayer"));
+
+        let dot = graph.to_dot();
+        assert!(dot.contains("digraph SMA_Architecture"));
+        assert!(dot.contains("\"StdoutAdapter\" -> \"LogPort\""));
+
+        let html = graph.to_html();
+        assert!(html.contains("<!DOCTYPE html>"));
+        assert!(html.contains("flowchart TD"));
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_graph_scoped_filter_one_hop() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("stitch_graph_scope_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).expect("create temp dir");
+
+        let code = r#"
+pub trait StoragePort {}
+pub struct DiskAdapter;
+impl StoragePort for DiskAdapter {}
+
+pub struct UnrelatedLayer;
+"#;
+        fs::write(temp_dir.join("storage.rs"), code).expect("write temp source");
+
+        let scope = ScopeFilter::new("DiskAdapter");
+
+        let extractor = GraphExtractor::new_scoped(&temp_dir, Some(scope));
+        let graph = extractor.extract();
+
+        let node_names: Vec<&str> = graph.nodes.iter().map(|n| n.name.as_str()).collect();
+        assert!(node_names.contains(&"DiskAdapter"));
+        // 1-hop boundary context retains StoragePort because DiskAdapter implements StoragePort
+        assert!(node_names.contains(&"StoragePort"));
+        // UnrelatedLayer is filtered out
+        assert!(!node_names.contains(&"UnrelatedLayer"));
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }

@@ -354,3 +354,38 @@ fn render_bar(pct: f64) -> String {
     let empty = 20 - filled;
     format!("[{}{}]", "█".repeat(filled), "░".repeat(empty))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_health_evaluation_clean_workspace() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("stitch_test_health_clean_{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let valid_file = temp_dir.join("clean.rs");
+        std::fs::write(
+            &valid_file,
+            "#[repr(C, align(64))]\npub struct CleanContext;\n",
+        )
+        .unwrap();
+
+        let cfg = StitchConfig::default();
+        let engine = HealthEngine::new(&cfg, &temp_dir);
+        let report = engine.evaluate();
+        let _ = std::fs::remove_dir_all(&temp_dir);
+
+        assert!(report.passed);
+        assert_eq!(report.grade, "A+");
+        assert_eq!(report.composite_score, 100.0);
+        assert_eq!(report.penalties.len(), 0);
+    }
+
+    #[test]
+    fn test_render_bar() {
+        assert_eq!(render_bar(100.0), "[████████████████████]");
+        assert_eq!(render_bar(0.0), "[░░░░░░░░░░░░░░░░░░░░]");
+        assert_eq!(render_bar(50.0), "[██████████░░░░░░░░░░]");
+    }
+}

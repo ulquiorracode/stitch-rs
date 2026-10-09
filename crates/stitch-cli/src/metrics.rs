@@ -1,8 +1,7 @@
-use crate::config::ScopeFilter;
+use crate::config::{ScopeFilter, collect_rust_files};
 use std::path::Path;
 use syn::visit::Visit;
 use syn::{Fields, ItemStruct, Type};
-use walkdir::WalkDir;
 
 #[derive(Debug, Clone)]
 pub struct StructLayoutReport {
@@ -47,32 +46,10 @@ impl<'a> MetricsAuditor<'a> {
     pub fn audit(&self) -> Vec<StructLayoutReport> {
         let mut reports = Vec::new();
 
-        let rust_files = WalkDir::new(self.root_dir)
-            .into_iter()
-            .filter_entry(|entry| {
-                let name = entry.file_name().to_string_lossy();
-                let path_str = entry.path().to_string_lossy();
-                entry.depth() == 0
-                    || (name != "target"
-                        && name != ".git"
-                        && !name.starts_with('.')
-                        && !path_str.contains("tests/ui")
-                        && !path_str.contains("tests\\ui")
-                        && !name.ends_with("bindings_pregenerated.rs"))
-            })
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"))
-            .filter(|e| {
-                if let Some(scope) = &self.scope {
-                    scope.is_file_relevant(e.path())
-                } else {
-                    true
-                }
-            });
+        let rust_files = collect_rust_files(self.root_dir, self.scope.as_ref());
 
-        for entry in rust_files {
-            let path = entry.path();
-            if let Ok(content) = std::fs::read_to_string(path)
+        for path in rust_files {
+            if let Ok(content) = std::fs::read_to_string(&path)
                 && let Ok(syntax_tree) = syn::parse_file(&content)
             {
                 let mut visitor = StructLayoutVisitor {
@@ -203,7 +180,62 @@ pub fn estimate_size_align(ty: &Type) -> (usize, usize) {
             };
             (elem_size * len, elem_align)
         }
+        Type::Tuple(tup) => {
+            if tup.elems.is_empty() {
+                (0, 1)
+            } else {
+                let mut offset = 0;
+                let mut max_align = 1;
+                for elem in &tup.elems {
+                    let (size, align) = estimate_size_align(elem);
+                    max_align = max_align.max(align);
+                    let pad = (align - (offset % align)) % align;
+                    offset += pad + size;
+                }
+                let tail_pad = (max_align - (offset % max_align)) % max_align;
+                (offset + tail_pad, max_align)
+            }
+        }
+        Type::Slice(slice) => {
+            let (_, elem_align) = estimate_size_align(&slice.elem);
+            (0, elem_align)
+        }
         Type::Reference(_) | Type::Ptr(_) => (8, 8),
         _ => (8, 8),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_estimate_size_align_scalars_and_composites() {
+        let ty_u8: Type = syn::parse_str("u8").unwrap();
+        assert_eq!(estimate_size_align(&ty_u8), (1, 1));
+
+        let ty_u16: Type = syn::parse_str("u16").unwrap();
+        assert_eq!(estimate_size_align(&ty_u16), (2, 2));
+
+        let ty_u32: Type = syn::parse_str("u32").unwrap();
+        assert_eq!(estimate_size_align(&ty_u32), (4, 4));
+
+        let ty_u64: Type = syn::parse_str("u64").unwrap();
+        assert_eq!(estimate_size_align(&ty_u64), (8, 8));
+
+        let ty_arr: Type = syn::parse_str("[u8; 32]").unwrap();
+        assert_eq!(estimate_size_align(&ty_arr), (32, 1));
+
+        let ty_arr_u64: Type = syn::parse_str("[u64; 4]").unwrap();
+        assert_eq!(estimate_size_align(&ty_arr_u64), (32, 8));
+
+        let ty_tuple: Type = syn::parse_str("(u8, u16)").unwrap();
+        assert_eq!(estimate_size_align(&ty_tuple), (4, 2));
+
+        let ty_unit: Type = syn::parse_str("()").unwrap();
+        assert_eq!(estimate_size_align(&ty_unit), (0, 1));
+
+        let ty_ptr: Type = syn::parse_str("*const u8").unwrap();
+        assert_eq!(estimate_size_align(&ty_ptr), (8, 8));
     }
 }
