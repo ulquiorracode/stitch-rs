@@ -7,7 +7,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.85.0"
 authors = ["Stitch Contributors", "GoldSrc.rs Systems Architects"]
@@ -20,9 +20,9 @@ keywords = ["pipeline", "middleware", "u-cycle", "sma", "zero-cost"]
 categories = ["rust-patterns", "no-std", "embedded"]
 
 [workspace.dependencies]
-stitch-core = { path = "crates/stitch-core", version = "0.2.0", default-features = false }
-stitch-macros = { path = "crates/stitch-macros", version = "0.2.0" }
-stitch-cli = { path = "crates/stitch-cli", version = "0.2.0" }
+stitch-core = { path = "crates/stitch-core", version = "0.3.0", default-features = false }
+stitch-macros = { path = "crates/stitch-macros", version = "0.3.0" }
+stitch-cli = { path = "crates/stitch-cli", version = "0.3.0" }
 
 syn = { version = "2.0", features = ["full", "visit", "extra-traits"] }
 quote = "1.0"

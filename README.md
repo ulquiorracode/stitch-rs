@@ -106,14 +106,14 @@ Add `stitch-rs` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-stitch-rs = "0.2.0"
+stitch-rs = "0.3.0"
 ```
 
 For bare-metal `#![no_std]` targets:
 
 ```toml
 [dependencies]
-stitch-rs = { version = "0.2.0", default-features = false }
+stitch-rs = { version = "0.3.0", default-features = false }
 ```
 
 ---
