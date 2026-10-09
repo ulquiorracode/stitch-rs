@@ -25,7 +25,7 @@ pub mod taxonomy;
 pub mod token;
 
 pub use blackboard::Blackboard;
-pub use cqs::{Command, CommandExecutor, Query};
+pub use cqs::{Command, CommandExecutor};
 pub use data::{Data, Entity, Event, ValueObject};
 pub use flow::FlowControl;
 pub use hash::{fnv1a_32, fnv1a_64};
@@ -38,7 +38,7 @@ pub use token::{RawId, RawToken, StitchId, StitchToken};
 pub mod prelude {
     pub use crate::assert_blackboard_aligned;
     pub use crate::blackboard::Blackboard;
-    pub use crate::cqs::{Command, CommandExecutor, Query};
+    pub use crate::cqs::{Command, CommandExecutor};
     pub use crate::data::{Data, Entity, Event, ValueObject};
     pub use crate::flow::FlowControl;
     pub use crate::hash::{fnv1a_32, fnv1a_64};

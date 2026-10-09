@@ -33,11 +33,14 @@ Outcome ◄─────── [Layer A: on_exit]  ◄── [Layer B: on_exit
 3. `FlowControl::Halt(error)`: Halts further descent; immediately begins ascent starting at the current layer with `Err(error)`.
 
 ### Closed Topology vs. Open Behavior
-
-The pipeline topology is **statically closed**: [`PipelineChain`] is sealed via an unnameable `Sealed` supertrait to prevent forging unverified chain nodes that violate U-cycle ascent/descent invariants.
-
+ 
+The pipeline topology is **statically closed**:
+- [`PipelineChain`] is sealed via an unnameable `Sealed` supertrait in a private module to prevent external crates from crafting unverified chain nodes.
+- Intermediate chain nodes ([`StackNode`], [`TerminalNode`]) have encapsulated fields and private constructors (`pub(crate)`), ensuring pipelines can only be constructed via [`Pipeline::on_terminal`] and [`.wrap`].
+- Both [`Pipeline::dispatch`] and direct [`PipelineChain::cycle`] statically assert L1D cache-line alignment (`ASSERT_CACHE_ALIGNED`) for the context `TCtx`.
+ 
 Conversely, behavior is **open**: layers and terminals are freely composable across generic contexts, intents, outcomes, and error domains.
-
+ 
 ---
 
 ## 3. Panic & Resilience Policy (Contract Invariant M7)

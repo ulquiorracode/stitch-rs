@@ -31,12 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Examples & Performance Benchmarks**:
   - `01_auth_logging_u_cycle.rs`: Multi-layer authentication, audit logging, and terminal execution.
   - `02_cache_short_circuit.rs`: Zero-allocation cache hit short-circuit traversal.
-  - `03_no_std_embedded.rs`: Pure `#![no_std]` bare-metal pipeline with hardware registers.
-  - Criterion benchmark suite comparing `stitch::Pipeline`, `Box<dyn Layer>`, hand-inlined baseline, and `tower::Service`.
+  - `03_no_std_embedded.rs`: `#![no_std]` bare-metal pipeline showcase with hardware registers (host-executed test).
+  - Criterion benchmark suite measuring synchronous pipeline throughput against `Box<dyn Layer>` and hand-inlined baseline, with an asynchronous `tower::Service` reference included for cross-paradigm architectural context.
 
 ### Changed
 
-- Encapsulated `TerminalNode` and `StackNode` internal fields behind constructor and accessor methods.
+- Encapsulated `TerminalNode` and `StackNode` internal fields and constructors (`pub(crate)`) to prevent bypassing cache-line alignment checks. Code constructing nodes directly should use `Pipeline::on_terminal(terminal)` and `.wrap(layer)`.
 - Made `sealed` module private in `stitch-core` to enforce unnameable trait bound.
 - Updated license to dual `MIT OR Apache-2.0`.
 - Set MSRV to `1.85.0`.
@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - **Strict Backward-Compatibility Purge**:
+  - Removed unused and incomplete `Query` trait from `stitch-core`.
   - Removed deprecated aliases `Admission` and `BlackboardFlow` (use `FlowControl`).
   - Removed deprecated traits `Middleware` and `TerminalHandler` (use `Layer` and `Terminal`).
   - Removed deprecated type alias `Machine` (use `Pipeline`).

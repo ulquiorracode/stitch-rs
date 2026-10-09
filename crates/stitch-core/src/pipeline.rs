@@ -21,7 +21,7 @@ pub struct TerminalNode<T>(T);
 impl<T> TerminalNode<T> {
     /// Wraps a terminal handler in a terminal chain leaf node.
     #[inline(always)]
-    pub const fn new(terminal: T) -> Self {
+    pub(crate) const fn new(terminal: T) -> Self {
         Self(terminal)
     }
 
@@ -47,7 +47,7 @@ pub struct StackNode<M, Inner> {
 impl<M, Inner> StackNode<M, Inner> {
     /// Constructs a new stack node wrapping an inner chain with an outer layer.
     #[inline(always)]
-    pub const fn new(layer: M, inner: Inner) -> Self {
+    pub(crate) const fn new(layer: M, inner: Inner) -> Self {
         Self { layer, inner }
     }
 
@@ -122,6 +122,7 @@ where
 {
     #[inline(always)]
     fn cycle(&mut self, ctx: &mut TCtx, intent: TIntent) -> Result<TOutcome, TErr> {
+        let () = TCtx::ASSERT_CACHE_ALIGNED;
         self.0.execute(ctx, intent)
     }
 }
@@ -136,6 +137,7 @@ where
 {
     #[inline(always)]
     fn cycle(&mut self, ctx: &mut TCtx, intent: TIntent) -> Result<TOutcome, TErr> {
+        let () = TCtx::ASSERT_CACHE_ALIGNED;
         // Phase 1: Descent (Спуск)
         let mut outcome = match self.layer.on_enter(ctx, intent) {
             FlowControl::Proceed(admitted) => self.inner.cycle(ctx, admitted),

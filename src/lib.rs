@@ -33,7 +33,7 @@ pub mod prelude {
     };
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "macros"))]
 mod tests {
     use super::prelude::*;
 

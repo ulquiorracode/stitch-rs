@@ -66,3 +66,16 @@ tower = { version = "0.5", default-features = false, features = ["util"] }
 name = "pipeline_bench"
 harness = false
 
+[[example]]
+name = "01_auth_logging_u_cycle"
+required-features = ["macros", "std"]
+
+[[example]]
+name = "02_cache_short_circuit"
+required-features = ["macros", "std"]
+
+[[example]]
+name = "03_no_std_embedded"
+required-features = ["macros"]
+
+

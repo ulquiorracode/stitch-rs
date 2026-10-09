@@ -108,7 +108,7 @@ fn main() {
 
 ## Tooling & Architecture-as-Code
 
-The workspace includes the `stitch` / `sma` CLI tool suite:
+The workspace includes the `stitch` CLI tool suite:
 
 - `stitch check`: Validates taxonomy rules, dependency boundaries, cache alignment, and hot-path heap allocations.
 - `stitch fix`: Automatically reorders struct fields by descending alignment to eliminate preventable padding waste.
