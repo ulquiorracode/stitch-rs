@@ -52,3 +52,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed vacuous trait `PortLayer` in favor of direct `Adapter` target port bounding.
   - Removed duplicate CLI binary `sma` (canonical single binary is `stitch`).
   - Removed facade alias `pub use stitch_macros as sma`.
+
+## [0.1.0] - 2026-10-08
+
+### Added
+
+- Initial release of `stitch-rs`.
+- Pure monomorphic U-cycle pipeline framework (`Pipeline`, `Machine`).
+- Sewing Machine Architecture (SMA) pattern abstraction (`on_enter` descent and `on_exit` ascent phases).
+- Zero-cost static generics chain without dynamic heap dispatch (`Box<dyn ..>`).
+- Strict Command-Query Separation (`CQS`) primitives (`Query`, `Command`).
+- Flow control primitives (`FlowControl::Continue`, `FlowControl::Halt`, `FlowControl::EarlyExit`).
+- Core `#![no_std]` compatible design without runtime allocator dependencies.
+- GitHub Actions CI matrix with automated clippy, formatting, and unit tests.
+
