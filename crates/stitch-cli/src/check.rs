@@ -913,6 +913,7 @@ mod tests {
             diagnostics: Vec::new(),
             in_hot_path_fn: false,
             in_pipeline_impl: false,
+            in_test: false,
         };
         visitor.visit_file(&syntax_tree);
 
@@ -960,6 +961,7 @@ mod tests {
             diagnostics: Vec::new(),
             in_hot_path_fn: false,
             in_pipeline_impl: false,
+            in_test: false,
         };
         visitor.visit_file(&syntax_tree);
 
