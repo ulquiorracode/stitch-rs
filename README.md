@@ -3,7 +3,7 @@
 <!-- Project Status & Metrics -->
 ![Status](https://img.shields.io/badge/status-active%20development-orange?logo=rust) [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license) [![CI](https://github.com/ulquiorracode/stitch-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/ulquiorracode/stitch-rs/actions/workflows/ci.yml) [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?logo=readme)](https://github.com/RichardLitt/standard-readme)  
 <!-- Repository & Community -->
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md) [![MSRV: 1.85.0](https://img.shields.io/badge/MSRV-1.85.0-blue.svg?logo=rust)](https://doc.rust-lang.org/edition-guide/rust-2024/) [![Crates.io](https://img.shields.io/crates/v/stitch-rs?style=flat-square)](https://crates.io/crates/stitch-rs) [![Docs.rs](https://img.shields.io/docsrs/stitch-rs?style=flat-square)](https://docs.rs/stitch-rs)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md) [![MSRV: 1.85.0](https://img.shields.io/badge/MSRV-1.85.0-blue.svg?logo=rust)](https://doc.rust-lang.org/edition-guide/rust-2024/) [![Crates.io](https://img.shields.io/crates/v/stitch-rs?style=flat-square)](https://crates.io/crates/stitch-rs) [![Docs.rs](https://img.shields.io/docsrs/stitch-rs?style=flat-square)](./docs/)
 
 > Zero-Cost, Monomorphic U-Cycle Middleware Pipeline Framework implementing The Sewing Machine Architecture (SMA).
 
@@ -31,6 +31,7 @@ It eliminates dynamic dispatch (`Box<dyn ...>`) and pointer chasing by flattenin
 ## Background
 
 Traditional middleware architectures (like tower, web frameworks, or object-oriented chains-of-responsibility) rely heavily on:
+
 1. Dynamic heap allocations (`Box<dyn Layer>` or pinned futures).
 2. Indirect branch mispredictions from vtable lookups.
 3. Asynchronous state machines with runtime polling overhead.
@@ -38,6 +39,7 @@ Traditional middleware architectures (like tower, web frameworks, or object-orie
 In realtime simulation loops (such as 1000 Hz game engine tick loops or network frame dispatchers), these abstractions introduce severe latency penalties (~5–75 ns per call).
 
 **stitch-rs** introduces **The Sewing Machine Architecture (SMA)**:
+
 - **Monomorphic Composition**: Traversal order and layer nesting are resolved entirely at compile time.
 - **Symmetric U-Cycle Traversal**: Descent (`on_enter`) descends to the terminal point of puncture, while ascent (`on_exit`) ascends symmetrically through enclosing layers.
 - **Scrooge Mechanical Sympathy**: Explicit 64-byte L1D cache line alignment contracts (`ASSERT_CACHE_ALIGNED`) and zero heap allocations on hot paths.
@@ -81,16 +83,18 @@ For detailed memory layouts, failure semantics, and contract invariants, see [AR
 
 ## Empirical Benchmarks
 
-Measurements performed on **11th Gen Intel Core i9-11900H @ 2.50GHz** via Criterion 0.5.1:
+Measurements performed on **11th Gen Intel Core i9-11900H @ 2.50GHz** via Criterion 0.5.1 (2 layers + terminal U-cycle, L1D-resident, ~3.9B iterations):
 
-| Target | Paradigm | Mean Latency | Speedup vs. Dynamic |
-| :--- | :--- | :--- | :--- |
-| `hand_inlined_baseline` | Raw procedural code | **1.08 ns** | 4.85x |
-| `stitch_monomorphic` | **stitch-rs Monomorphic Pipeline** | **1.30 ns** | **4.03x faster** |
-| `box_dyn_layers` | Dynamic Polymorphism (`Vec<Box<dyn>>`) | **5.24 ns** | 1.00x (Baseline) |
-| `tower_ready_future` | Async Service Pipeline (`tower::Service`) | **74.18 ns** | 14.15x slower |
+| Target | Paradigm | Mean Latency | Single-Thread Throughput | Speedup vs. Dynamic |
+| :--- | :--- | :--- | :--- | :--- |
+| `hand_inlined_baseline` | Raw procedural code | **1.08 ns** | ~925.9 M ops/sec | 4.85x |
+| `stitch_monomorphic` | **stitch-rs Monomorphic Pipeline** | **1.30 ns** | **~769.2 M ops/sec** | **4.03x faster** |
+| `box_dyn_layers` | Dynamic Polymorphism (`Vec<Box<dyn>>`) | **5.24 ns** | ~190.8 M ops/sec | 1.00x (Baseline) |
+| `tower_ready_future`* | Async Service Pipeline (`tower::Service`) | **74.18 ns** | ~13.5 M ops/sec | 14.15x slower |
 
-For testbed specifications, L1D cache line analysis, and reproducible commands, read [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+*\*Note: `tower::Service` is included as the authoritative Rust industry reference for middleware architecture due to the lack of synchronous, `#![no_std]` middleware libraries in embedded/gamedev ecosystems. It illustrates the runtime cost of asynchronous futures machinery in synchronous in-memory domains.*
+
+For comprehensive testbed specifications, exact iteration counts, and reproducible benchmark commands, read [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ---
 
@@ -165,6 +169,7 @@ fn main() {
 ```
 
 Detailed integration examples:
+
 - [examples/01_auth_logging_u_cycle.rs](examples/01_auth_logging_u_cycle.rs)
 - [examples/02_cache_short_circuit.rs](examples/02_cache_short_circuit.rs)
 - [examples/03_no_std_embedded.rs](examples/03_no_std_embedded.rs)
