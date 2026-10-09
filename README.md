@@ -116,6 +116,9 @@ For bare-metal `#![no_std]` targets:
 stitch-rs = { version = "0.3.0", default-features = false }
 ```
 
+> [!NOTE]
+> **`#![no_std]` Scope**: The core execution engine (`stitch-core`) is strictly `#![no_std]` and zero-allocation (relying exclusively on `core::*`). The top-level facade crate (`stitch-rs`) enables `std` by default. Tooling (`stitch-cli`) and procedural macros (`stitch-macros`) require `std` (host compiler toolchain).
+
 ---
 
 ## Usage
