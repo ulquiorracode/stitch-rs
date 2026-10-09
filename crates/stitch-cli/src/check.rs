@@ -492,6 +492,9 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
                     | "todo"
                     | "unimplemented"
                     | "unreachable"
+                    | "assert"
+                    | "assert_eq"
+                    | "assert_ne"
             )
         {
             self.record(
@@ -521,6 +524,16 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
                     format!("Method call `.{method_name}()` incurs dynamic heap allocation in hot path."),
                     Some("Avoid heap allocations on hot paths; pass borrowed slices or fixed-capacity buffers.".to_string()),
                 );
+            } else if matches!(method_name.as_str(), "unwrap" | "expect") {
+                self.record(
+                    "SMA-HOTPATH-020",
+                    i.method.span(),
+                    format!("Method call `.{method_name}()` can panic in hot path."),
+                    Some(
+                        "Use pattern matching or the `?` operator instead of unwrapping."
+                            .to_string(),
+                    ),
+                );
             }
         }
         syn::visit::visit_expr_method_call(self, i);
@@ -545,6 +558,22 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
                     i.func.span(),
                     format!("Heap constructor `{func_str}` is forbidden in hot path."),
                     Some("Construct data statically or pre-allocate during initialization outside the U-cycle.".to_string()),
+                );
+            } else if func_str == "abort"
+                || func_str.ends_with(":: abort")
+                || func_str == "exit"
+                || func_str.ends_with(":: exit")
+                || func_str.contains("panic_any")
+                || func_str.contains("unreachable_unchecked")
+            {
+                self.record(
+                    "SMA-HOTPATH-020",
+                    i.func.span(),
+                    format!("Direct termination call `{func_str}` is forbidden in hot path."),
+                    Some(
+                        "Return explicit Result::Err instead of abrupt process abortion."
+                            .to_string(),
+                    ),
                 );
             }
         }

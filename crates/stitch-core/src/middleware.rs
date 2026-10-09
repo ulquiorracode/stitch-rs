@@ -37,29 +37,3 @@ pub trait Terminal<TCtx, TIntent = (), TOutcome = (), TErr = ()> {
     /// Executes the intent directly and returns the atomic outcome.
     fn execute(&mut self, ctx: &mut TCtx, intent: TIntent) -> Result<TOutcome, TErr>;
 }
-
-/// Compatibility alias for `Layer`. Prefer `Layer` in Sewing Machine Architecture.
-#[deprecated(since = "0.2.0", note = "Use `Layer` instead")]
-pub trait Middleware<TCtx, TIntent = (), TOutcome = (), TErr = ()>:
-    Layer<TCtx, TIntent, TOutcome, TErr>
-{
-}
-
-#[allow(deprecated)]
-impl<T, TCtx, TIntent, TOutcome, TErr> Middleware<TCtx, TIntent, TOutcome, TErr> for T where
-    T: Layer<TCtx, TIntent, TOutcome, TErr>
-{
-}
-
-/// Compatibility alias for `Terminal`. Prefer `Terminal` in Sewing Machine Architecture.
-#[deprecated(since = "0.2.0", note = "Use `Terminal` instead")]
-pub trait TerminalHandler<TCtx, TIntent = (), TOutcome = (), TErr = ()>:
-    Terminal<TCtx, TIntent, TOutcome, TErr>
-{
-}
-
-#[allow(deprecated)]
-impl<T, TCtx, TIntent, TOutcome, TErr> TerminalHandler<TCtx, TIntent, TOutcome, TErr> for T where
-    T: Terminal<TCtx, TIntent, TOutcome, TErr>
-{
-}

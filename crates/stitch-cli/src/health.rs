@@ -155,7 +155,7 @@ impl<'a> HealthEngine<'a> {
                         waste_ratio * 100.0
                     ),
                 });
-                recommendations.push("Reorder struct fields by descending alignment (align 8 -> align 4 -> align 2 -> align 1) or run `sma fix --scrooge`.".to_string());
+                recommendations.push("Reorder struct fields by descending alignment (align 8 -> align 4 -> align 2 -> align 1) or run `stitch fix --scrooge`.".to_string());
             }
             if scrooge_violations > 0 {
                 penalties.push(HealthPenalty {

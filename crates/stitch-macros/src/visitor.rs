@@ -46,11 +46,11 @@ impl<'ast> Visit<'ast> for HotPathAstVisitor {
 
         match macro_name.as_str() {
             "format" | "vec" | "println" | "eprintln" | "panic" | "dbg" | "todo"
-            | "unimplemented" | "unreachable" => {
+            | "unimplemented" | "unreachable" | "assert" | "assert_eq" | "assert_ne" => {
                 self.violations.push(Error::new(
                     i.path.span(),
                     format!(
-                        "[{}] Scrooge Violation: Macro `{}!` performs heap allocations or I/O blocking inside hot path.",
+                        "[{}] Scrooge Violation: Macro `{}!` performs heap allocations, panics, or I/O blocking inside hot path.",
                         SMA_HOTPATH_020, macro_name
                     ),
                 ));
@@ -69,6 +69,15 @@ impl<'ast> Visit<'ast> for HotPathAstVisitor {
                     format!(
                         "[{}] Scrooge Violation: Method call `.{method_name}()` incurs dynamic heap allocation in hot path.",
                         SMA_HOTPATH_021
+                    ),
+                ));
+            }
+            "unwrap" | "expect" => {
+                self.violations.push(Error::new(
+                    i.method.span(),
+                    format!(
+                        "[{}] Contract Violation: Method call `.{method_name}()` can panic in hot path. Use pattern matching or `?` operator instead.",
+                        SMA_HOTPATH_020
                     ),
                 ));
             }
@@ -94,6 +103,20 @@ impl<'ast> Visit<'ast> for HotPathAstVisitor {
                 format!(
                     "[{}] Scrooge Violation: Heap constructor `{func_str}` is forbidden in hot path.",
                     SMA_HOTPATH_022
+                ),
+            ));
+        } else if func_str == "abort"
+            || func_str.ends_with(":: abort")
+            || func_str == "exit"
+            || func_str.ends_with(":: exit")
+            || func_str.contains("panic_any")
+            || func_str.contains("unreachable_unchecked")
+        {
+            self.violations.push(Error::new(
+                i.func.span(),
+                format!(
+                    "[{}] Contract Violation: Direct termination call `{func_str}` is forbidden in hot path.",
+                    SMA_HOTPATH_020
                 ),
             ));
         }

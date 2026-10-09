@@ -16,12 +16,58 @@ pub struct Pipeline<TCtx: Blackboard, TIntent, TOutcome, TErr, TChain> {
 }
 
 /// A leaf terminal node wrapping the terminal handler.
-pub struct TerminalNode<T>(pub T);
+pub struct TerminalNode<T>(T);
+
+impl<T> TerminalNode<T> {
+    /// Wraps a terminal handler in a terminal chain leaf node.
+    #[inline(always)]
+    pub const fn new(terminal: T) -> Self {
+        Self(terminal)
+    }
+
+    /// Borrows the underlying terminal handler.
+    #[inline(always)]
+    pub fn terminal(&self) -> &T {
+        &self.0
+    }
+
+    /// Mutably borrows the underlying terminal handler.
+    #[inline(always)]
+    pub fn terminal_mut(&mut self) -> &mut T {
+        &mut self.0
+    }
+}
 
 /// A node in the compile-time stack of middleware layers.
 pub struct StackNode<M, Inner> {
-    pub layer: M,
-    pub inner: Inner,
+    layer: M,
+    inner: Inner,
+}
+
+impl<M, Inner> StackNode<M, Inner> {
+    /// Constructs a new stack node wrapping an inner chain with an outer layer.
+    #[inline(always)]
+    pub const fn new(layer: M, inner: Inner) -> Self {
+        Self { layer, inner }
+    }
+
+    /// Borrows the outer layer of this node.
+    #[inline(always)]
+    pub fn layer(&self) -> &M {
+        &self.layer
+    }
+
+    /// Borrows the inner chain of this node.
+    #[inline(always)]
+    pub fn inner(&self) -> &Inner {
+        &self.inner
+    }
+
+    /// Mutably borrows the inner chain of this node.
+    #[inline(always)]
+    pub fn inner_mut(&mut self) -> &mut Inner {
+        &mut self.inner
+    }
 }
 
 impl<TCtx: Blackboard, TIntent, TOutcome, TErr, TTerm>
@@ -32,7 +78,7 @@ where
     /// Starts constructing a new pipeline ending with the specified terminal handler.
     pub const fn on_terminal(terminal: TTerm) -> Self {
         Self {
-            chain: TerminalNode(terminal),
+            chain: TerminalNode::new(terminal),
             _phantom: PhantomData,
         }
     }
@@ -47,24 +93,9 @@ impl<TCtx: Blackboard, TIntent, TOutcome, TErr, TChain>
         M: Layer<TCtx, TIntent, TOutcome, TErr>,
     {
         Pipeline {
-            chain: StackNode {
-                layer,
-                inner: self.chain,
-            },
+            chain: StackNode::new(layer, self.chain),
             _phantom: PhantomData,
         }
-    }
-
-    /// Compatibility alias for `wrap`.
-    #[inline(always)]
-    pub fn use_middleware<M>(
-        self,
-        middleware: M,
-    ) -> Pipeline<TCtx, TIntent, TOutcome, TErr, StackNode<M, TChain>>
-    where
-        M: Layer<TCtx, TIntent, TOutcome, TErr>,
-    {
-        self.wrap(middleware)
     }
 }
 
@@ -137,18 +168,12 @@ where
     /// - **Application Re-entry**: Re-entering the pipeline after an uncaught panic is an application-level
     ///   contract violation.
     /// - **Host Isolation Barrier**: In userspace / host applications (e.g., FFI, plugin hosts, or servers),
-    ///   use [`dispatch_isolated`](Self::dispatch_isolated) (enabled via the `std` feature) to catch unwinds
+    ///   use `dispatch_isolated` (enabled via the `std` feature) to catch unwinds
     ///   at the perimeter boundary and translate them into typed failure states without taking down the process.
     #[inline(always)]
     pub fn dispatch(&mut self, ctx: &mut TCtx, intent: TIntent) -> Result<TOutcome, TErr> {
         let () = TCtx::ASSERT_CACHE_ALIGNED;
         self.chain.cycle(ctx, intent)
-    }
-
-    /// Alias using Sewing Machine Architecture terminology.
-    #[inline(always)]
-    pub fn stitch(&mut self, ctx: &mut TCtx, intent: TIntent) -> Result<TOutcome, TErr> {
-        self.dispatch(ctx, intent)
     }
 
     /// Dispatches an intent within an isolated `catch_unwind` error barrier.
@@ -179,8 +204,3 @@ where
         }))
     }
 }
-
-/// Compatibility alias for `Pipeline`. Prefer `Pipeline` in Sewing Machine Architecture.
-#[deprecated(since = "0.2.0", note = "Use `Pipeline` instead")]
-pub type Machine<TCtx, TIntent, TOutcome, TErr, TChain> =
-    Pipeline<TCtx, TIntent, TOutcome, TErr, TChain>;

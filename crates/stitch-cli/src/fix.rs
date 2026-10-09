@@ -1,4 +1,4 @@
-//! Scrooge Systems Automated Struct Alignment Fixer (`stitch fix --scrooge` / `sma fix --scrooge`).
+//! Scrooge Systems Automated Struct Alignment Fixer (`stitch fix --scrooge`).
 //!
 //! Reorders struct fields in descending alignment order (align 8 -> align 4 -> align 2 -> align 1),
 //! eliminating internal padding holes, reducing cache footprint, and optimizing memory layout.
@@ -392,16 +392,11 @@ fn find_matching_brace_syntax_aware(content: &str, open_pos: usize) -> Option<us
 
         // Char literal vs Lifetime
         if b == b'\'' {
-            let is_char_lit = if i + 2 < len && bytes[i + 2] == b'\'' && bytes[i + 1] != b'\\' {
-                true // e.g. 'x'
-            } else if i + 3 < len && bytes[i + 1] == b'\\' && bytes[i + 3] == b'\'' {
-                true // e.g. '\n', '\t', '\''
-            } else if i + 1 < len && bytes[i + 1] == b'\\' {
-                // Unicode escape '\u{...}' or hex '\x..'
-                bytes[i + 2..len.min(i + 12)].iter().any(|&c| c == b'\'')
-            } else {
-                false
-            };
+            let is_char_lit = (i + 2 < len && bytes[i + 2] == b'\'' && bytes[i + 1] != b'\\')
+                || (i + 3 < len && bytes[i + 1] == b'\\' && bytes[i + 3] == b'\'')
+                || (i + 1 < len
+                    && bytes[i + 1] == b'\\'
+                    && bytes[i + 2..len.min(i + 12)].contains(&b'\''));
 
             if is_char_lit {
                 i += 1;

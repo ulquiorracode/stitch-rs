@@ -17,14 +17,6 @@ pub enum FlowControl<TIntent = (), TOutcome = (), E = ()> {
     Halt(E),
 }
 
-/// Compatibility alias for `FlowControl`.
-#[deprecated(since = "0.2.0", note = "Use `FlowControl` instead")]
-pub type Admission<TIntent, TOutcome, E> = FlowControl<TIntent, TOutcome, E>;
-
-/// Convenience alias for Blackboard-centric pipelines where intent and outcome are unit `()`.
-#[deprecated(since = "0.2.0", note = "Use `FlowControl<(), (), E>` instead")]
-pub type BlackboardFlow<E = ()> = FlowControl<(), (), E>;
-
 impl<TIntent, TOutcome, E> FlowControl<TIntent, TOutcome, E> {
     /// Returns true if this decision is `Proceed`.
     #[inline(always)]

@@ -87,7 +87,7 @@ fn verify_return_flow_control(sig: &Signature) -> Result<()> {
     match &sig.output {
         ReturnType::Type(_, ty) => {
             let ty_str = quote::quote!(#ty).to_string();
-            if !ty_str.contains("FlowControl") && !ty_str.contains("Admission") {
+            if !ty_str.contains("FlowControl") {
                 return Err(Error::new(
                     ty.span(),
                     format!(

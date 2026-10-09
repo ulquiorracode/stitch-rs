@@ -2,20 +2,17 @@
 name = "stitch-cli"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Standalone Architecture-as-Code CLI binaries (`stitch` and `sma`) for Sewing Machine Architecture"
+description = "Standalone Architecture-as-Code CLI binary (`stitch`) for Sewing Machine Architecture"
 keywords.workspace = true
 categories.workspace = true
 
 [[bin]]
 name = "stitch"
 path = "src/bin/stitch.rs"
-
-[[bin]]
-name = "sma"
-path = "src/bin/sma.rs"
 
 [dependencies]
 stitch-core = { workspace = true }

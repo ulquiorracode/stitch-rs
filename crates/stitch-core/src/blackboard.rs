@@ -53,6 +53,6 @@ mod tests {
     #[test]
     fn test_blackboard_alignment() {
         assert!(core::mem::align_of::<AlignedContext>() >= 64);
-        let _ = <AlignedContext as Blackboard>::ASSERT_CACHE_ALIGNED;
+        let () = <AlignedContext as Blackboard>::ASSERT_CACHE_ALIGNED;
     }
 }

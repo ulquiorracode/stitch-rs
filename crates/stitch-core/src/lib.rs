@@ -9,7 +9,7 @@
 //! - **Memory & Scratchpads**: [`Blackboard`]
 //! - **Registration & Identification**: [`StitchToken`], [`StitchId`], [`RawToken`], [`RawId`]
 //! - **Domain Intent Accounting**: [`Entity`], [`ValueObject`], [`Event`], [`Data`]
-//! - **Flow Control**: [`FlowControl`], [`Admission`]
+//! - **Flow Control**: [`FlowControl`]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -28,14 +28,8 @@ pub use blackboard::Blackboard;
 pub use cqs::{Command, CommandExecutor, Query};
 pub use data::{Data, Entity, Event, ValueObject};
 pub use flow::FlowControl;
-#[allow(deprecated)]
-pub use flow::{Admission, BlackboardFlow};
 pub use hash::{fnv1a_32, fnv1a_64};
 pub use middleware::{Layer, Terminal};
-#[allow(deprecated)]
-pub use middleware::{Middleware, TerminalHandler};
-#[allow(deprecated)]
-pub use pipeline::Machine;
 pub use pipeline::{Pipeline, PipelineChain, StackNode, TerminalNode};
 pub use taxonomy::{Adapter, Hub, Port};
 pub use token::{RawId, RawToken, StitchId, StitchToken};
@@ -47,14 +41,8 @@ pub mod prelude {
     pub use crate::cqs::{Command, CommandExecutor, Query};
     pub use crate::data::{Data, Entity, Event, ValueObject};
     pub use crate::flow::FlowControl;
-    #[allow(deprecated)]
-    pub use crate::flow::{Admission, BlackboardFlow};
     pub use crate::hash::{fnv1a_32, fnv1a_64};
     pub use crate::middleware::{Layer, Terminal};
-    #[allow(deprecated)]
-    pub use crate::middleware::{Middleware, TerminalHandler};
-    #[allow(deprecated)]
-    pub use crate::pipeline::Machine;
     pub use crate::pipeline::{Pipeline, PipelineChain, StackNode, TerminalNode};
     pub use crate::taxonomy::{Adapter, Hub, Port};
     pub use crate::token::{RawId, RawToken, StitchId, StitchToken};

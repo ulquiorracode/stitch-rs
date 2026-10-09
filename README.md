@@ -39,8 +39,9 @@ Outcome ◄─────── [Layer A: on_exit]  ◄── [Layer B: on_exit
 ## Usage
 
 ```rust
+use stitch_core::blackboard::Blackboard;
 use stitch_core::flow::FlowControl;
-use stitch_core::middleware::{Blackboard, Layer, Terminal};
+use stitch_core::middleware::{Layer, Terminal};
 use stitch_core::pipeline::Pipeline;
 
 #[repr(C, align(64))]

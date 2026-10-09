@@ -22,9 +22,6 @@ pub use stitch_macros::*;
 #[cfg(feature = "macros")]
 pub use stitch_macros as stitch;
 
-#[cfg(feature = "macros")]
-pub use stitch_macros as sma;
-
 /// Unified prelude re-exporting all core traits, tokens, and macros.
 pub mod prelude {
     pub use stitch_core::prelude::*;

@@ -267,7 +267,7 @@ pub enum ConfigError {
     },
     Parse {
         path: PathBuf,
-        source: toml::de::Error,
+        source: Box<toml::de::Error>,
     },
 }
 
@@ -296,7 +296,7 @@ impl std::error::Error for ConfigError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Io { source, .. } => Some(source),
-            Self::Parse { source, .. } => Some(source),
+            Self::Parse { source, .. } => Some(source.as_ref()),
         }
     }
 }
@@ -321,7 +321,7 @@ impl StitchConfig {
                     let cfg = toml::from_str::<StitchConfig>(&content).map_err(|e| {
                         ConfigError::Parse {
                             path: path.clone(),
-                            source: e,
+                            source: Box::new(e),
                         }
                     })?;
                     return Ok(cfg);

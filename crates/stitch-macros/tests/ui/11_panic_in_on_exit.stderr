@@ -1,4 +1,4 @@
-error: [SMA-HOTPATH-020] Scrooge Violation: Macro `panic!` performs heap allocations or I/O blocking inside hot path.
+error: [SMA-HOTPATH-020] Scrooge Violation: Macro `panic!` performs heap allocations, panics, or I/O blocking inside hot path.
   --> tests/ui/11_panic_in_on_exit.rs:18:9
    |
 18 |         panic!("Panic in on_exit violates total execution contract");
