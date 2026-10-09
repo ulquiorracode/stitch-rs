@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `02_cache_short_circuit.rs`: Zero-allocation cache hit short-circuit traversal.
   - `03_no_std_embedded.rs`: `#![no_std]` bare-metal pipeline showcase with hardware registers (host-executed test).
   - Criterion benchmark suite measuring synchronous pipeline throughput against `Box<dyn Layer>` and hand-inlined baseline, with an asynchronous `tower::Service` reference included for cross-paradigm architectural context.
+- **Community & Governance Standards**:
+  - `CONTRIBUTING.md`: Scrooge engineering principles, failure explicit rules, and branch guidelines.
+  - `SECURITY.md`: Coordinated vulnerability disclosure policy and supported versions.
+  - GitHub integration: `PULL_REQUEST_TEMPLATE.md`, `dependabot.yml`, `bug_report.yml`, and `feature_request.yml`.
 
 ### Changed
 
@@ -65,4 +69,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Flow control primitives (`FlowControl::Continue`, `FlowControl::Halt`, `FlowControl::EarlyExit`).
 - Core `#![no_std]` compatible design without runtime allocator dependencies.
 - GitHub Actions CI matrix with automated clippy, formatting, and unit tests.
-

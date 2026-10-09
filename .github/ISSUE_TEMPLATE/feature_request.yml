@@ -1,0 +1,19 @@
+name: "Feature Request"
+description: "Propose an architectural enhancement or feature for stitch-rs"
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement / Architectural Motivation
+      description: What limitation or design requirement does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: Proposed Design / Solution
+      description: Detail API contracts, memory layout, invariants, and implementation rationale.
+    validations:
+      required: true
