@@ -67,6 +67,54 @@ pub fn verify_terminal_impl(item_impl: &ItemImpl) -> Result<()> {
     Ok(())
 }
 
+/// Verifies Query trait implementation: strictly immutable context `&TCtx` and no mutation statements.
+pub fn verify_query_impl(item_impl: &ItemImpl) -> Result<()> {
+    for item in &item_impl.items {
+        if let ImplItem::Fn(method) = item {
+            let fn_name = method.sig.ident.to_string();
+            if fn_name == "query" {
+                // Ensure receiver is &self
+                verify_receiver_immutable(&method.sig)?;
+
+                // Ensure ctx argument is not mutable &mut
+                for input in &method.sig.inputs {
+                    if let syn::FnArg::Typed(pat_type) = input {
+                        let ty_str = quote::quote!(#pat_type).to_string();
+                        if ty_str.contains("& mut") {
+                            return Err(Error::new(
+                                pat_type.span(),
+                                format!(
+                                    "[{SMA_CQS_050}] CQS Violation: Query method `query` cannot accept mutable references `&mut`. Queries must be pure reads.",
+                                ),
+                            ));
+                        }
+                    }
+                }
+
+                // Check hot-path body statements
+                let mut visitor = HotPathAstVisitor::new();
+                visitor.validate_fn(method)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Verifies Command trait implementation: hot-path body statements.
+pub fn verify_command_impl(item_impl: &ItemImpl) -> Result<()> {
+    for item in &item_impl.items {
+        if let ImplItem::Fn(method) = item {
+            let fn_name = method.sig.ident.to_string();
+            if fn_name == "execute" {
+                verify_receiver_immutable(&method.sig)?;
+                let mut visitor = HotPathAstVisitor::new();
+                visitor.validate_fn(method)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 fn verify_receiver_immutable(sig: &Signature) -> Result<()> {
     match sig.receiver() {
         Some(Receiver {

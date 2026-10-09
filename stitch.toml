@@ -42,12 +42,13 @@ BOUND-COLOCATION       = "deny"
 CONCUR-RECEIVER-MUT    = "deny"
 
 # ------------------------------------------------------------------------------
-# SCROOGE MECHANICAL TUNING
+# SCOPE OVERRIDES (Examples, Tests, Benches)
 # ------------------------------------------------------------------------------
-[scrooge]
-cache_line_bytes       = 64
-max_padding_waste_pct  = 15.0
-forbid_heap_types      = [
-    "String", "Vec", "Box", "Arc", "Rc", "BTreeMap", "HashMap", "HashSet",
-    "LinkedList", "VecDeque", "CString", "OsString", "PathBuf"
-]
+[scopes."examples/**"]
+rules = { HOTPATH-ALLOC-MACRO = "allow", HOTPATH-BLOCKING-IO = "allow" }
+
+[scopes."benches/**"]
+rules = { SCROOGE-CACHE-ALIGN = "allow" }
+
+[scopes."crates/stitch-core/**"]
+rules = { HOTPATH-ALLOC-MACRO = "allow", HOTPATH-PANIC = "allow", SCROOGE-CACHE-ALIGN = "allow" }

@@ -453,6 +453,38 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
             }
         }
 
+        // CQS Checks: Query & Command
+        if has_attr(&i.attrs, "query") || is_impl_of(i, "Query") {
+            for item in &i.items {
+                if let syn::ImplItem::Fn(m) = item {
+                    let fn_name = m.sig.ident.to_string();
+                    if fn_name == "query" {
+                        if is_receiver_mut(&m.sig) {
+                            self.record(
+                                "SMA-CQS-050",
+                                m.sig.span(),
+                                "Query method `query` has mutable receiver `&mut self`. Queries must be pure reads on `&self`.".to_string(),
+                                Some("Change receiver to `&self`.".to_string()),
+                            );
+                        }
+                        for input in &m.sig.inputs {
+                            if let syn::FnArg::Typed(pat_type) = input {
+                                let ty_str = quote::quote!(#pat_type).to_string();
+                                if ty_str.contains("& mut") {
+                                    self.record(
+                                        "SMA-CQS-050",
+                                        pat_type.span(),
+                                        "Query method cannot receive mutable reference `&mut`. CQS strictly forbids mutation in queries.".to_string(),
+                                        Some("Pass immutable reference `&TCtx`.".to_string()),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         let was_pipeline = self.in_pipeline_impl;
         self.in_pipeline_impl = is_pipeline;
         syn::visit::visit_item_impl(self, i);

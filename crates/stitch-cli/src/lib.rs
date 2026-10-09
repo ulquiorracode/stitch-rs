@@ -58,6 +58,9 @@ pub enum Commands {
         /// Target thread-safety and receiver immutability
         #[arg(long)]
         concur: bool,
+        /// Target Command-Query Separation (CQS) invariants
+        #[arg(long)]
+        cqs: bool,
         /// Target all categories
         #[arg(long)]
         all: bool,
@@ -153,6 +156,7 @@ pub fn execute(command: Commands) -> Result<(), Box<dyn std::error::Error>> {
             bound,
             hotpath,
             concur,
+            cqs,
             all,
             format,
             strict,
@@ -166,6 +170,7 @@ pub fn execute(command: Commands) -> Result<(), Box<dyn std::error::Error>> {
                 bound,
                 hotpath,
                 concur,
+                cqs,
                 all,
                 format: &format,
                 strict,
@@ -217,6 +222,7 @@ pub struct CheckArgs<'a> {
     pub bound: bool,
     pub hotpath: bool,
     pub concur: bool,
+    pub cqs: bool,
     pub all: bool,
     pub strict: bool,
 }
@@ -267,6 +273,9 @@ pub fn run_check(target_dir: &Path, args: CheckArgs<'_>) -> Result<(), Box<dyn s
     }
     if args.concur {
         cat_set.insert("concur".to_string());
+    }
+    if args.cqs {
+        cat_set.insert("cqs".to_string());
     }
 
     if !args.all && !cat_set.is_empty() {

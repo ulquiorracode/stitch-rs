@@ -19,17 +19,19 @@ pub mod data;
 pub mod flow;
 pub mod hash;
 pub mod middleware;
+pub mod outbox;
 pub mod pipeline;
 mod sealed;
 pub mod taxonomy;
 pub mod token;
 
 pub use blackboard::Blackboard;
-pub use cqs::{Command, CommandExecutor};
+pub use cqs::{Command, CommandExecutor, CommandPermit, PropRead, PropWrite, Query, QueryExecutor};
 pub use data::{Data, Entity, Event, ValueObject};
 pub use flow::FlowControl;
 pub use hash::{fnv1a_32, fnv1a_64};
-pub use middleware::{Layer, Terminal};
+pub use middleware::{Layer, StatelessLayer, StatelessLayerTable, Terminal};
+pub use outbox::Outbox;
 pub use pipeline::{Pipeline, PipelineChain, StackNode, TerminalNode};
 pub use taxonomy::{Adapter, Hub, Port};
 pub use token::{RawId, RawToken, StitchId, StitchToken};
@@ -38,11 +40,15 @@ pub use token::{RawId, RawToken, StitchId, StitchToken};
 pub mod prelude {
     pub use crate::assert_blackboard_aligned;
     pub use crate::blackboard::Blackboard;
-    pub use crate::cqs::{Command, CommandExecutor};
+    pub use crate::cqs::{
+        Command, CommandExecutor, CommandPermit, PropRead, PropWrite, Query, QueryExecutor,
+    };
     pub use crate::data::{Data, Entity, Event, ValueObject};
+    pub use crate::define_layer_enum;
     pub use crate::flow::FlowControl;
     pub use crate::hash::{fnv1a_32, fnv1a_64};
-    pub use crate::middleware::{Layer, Terminal};
+    pub use crate::middleware::{Layer, StatelessLayer, StatelessLayerTable, Terminal};
+    pub use crate::outbox::Outbox;
     pub use crate::pipeline::{Pipeline, PipelineChain, StackNode, TerminalNode};
     pub use crate::taxonomy::{Adapter, Hub, Port};
     pub use crate::token::{RawId, RawToken, StitchId, StitchToken};
@@ -60,6 +66,7 @@ mod tests {
 
     impl Blackboard for TestBlackboard {}
 
+    #[derive(Clone, Copy)]
     enum MathIntent {
         Add(u64),
         Multiply(u64),
@@ -311,5 +318,76 @@ mod tests {
         let clean_res = clean_pipe.dispatch(&mut ctx, MathIntent::Add(15));
         assert_eq!(clean_res, Ok(15));
         assert_eq!(ctx.state, 15);
+    }
+
+    struct MultiplierLayer {
+        factor: u64,
+    }
+
+    impl Layer<TestBlackboard, MathIntent, u64, &'static str> for MultiplierLayer {
+        fn on_enter(
+            &self,
+            _ctx: &mut TestBlackboard,
+            intent: MathIntent,
+        ) -> FlowControl<MathIntent, u64, &'static str> {
+            match intent {
+                MathIntent::Add(v) => FlowControl::Proceed(MathIntent::Add(v * self.factor)),
+                other => FlowControl::Proceed(other),
+            }
+        }
+        fn on_exit(&self, _ctx: &mut TestBlackboard, _outcome: &mut Result<u64, &'static str>) {}
+    }
+
+    crate::define_layer_enum! {
+        enum DynamicMathLayer<TestBlackboard, MathIntent, u64, &'static str> {
+            Guard(LimitGuardLayer),
+            Multiplier(MultiplierLayer),
+        }
+    }
+
+    #[test]
+    fn test_define_layer_enum_dispatch() {
+        let mut ctx = TestBlackboard {
+            state: 10,
+            audit_len: 0,
+            audit: [""; 4],
+        };
+
+        let dynamic_layer = DynamicMathLayer::Multiplier(MultiplierLayer { factor: 2 });
+        let mut pipeline = Pipeline::on_terminal(MathTerminal).wrap(dynamic_layer);
+
+        let res = pipeline.dispatch(&mut ctx, MathIntent::Add(5)).unwrap();
+        assert_eq!(res, 20); // 10 + (5 * 2) = 20
+        assert_eq!(ctx.state, 20);
+    }
+
+    #[test]
+    fn test_stateless_layer_table_dispatch() {
+        let mut ctx = TestBlackboard {
+            state: 10,
+            audit_len: 0,
+            audit: [""; 4],
+        };
+
+        fn filter_negative(
+            _ctx: &mut TestBlackboard,
+            intent: MathIntent,
+        ) -> FlowControl<MathIntent, u64, &'static str> {
+            FlowControl::Proceed(intent)
+        }
+
+        fn log_exit(_ctx: &mut TestBlackboard, _outcome: &mut Result<u64, &'static str>) {}
+
+        let table_layers = [StatelessLayer {
+            on_enter_fn: filter_negative,
+            on_exit_fn: log_exit,
+        }];
+
+        let table = StatelessLayerTable::new(&table_layers);
+        let mut pipeline = Pipeline::on_terminal(MathTerminal).wrap(table);
+
+        let res = pipeline.dispatch(&mut ctx, MathIntent::Add(7)).unwrap();
+        assert_eq!(res, 17);
+        assert_eq!(ctx.state, 17);
     }
 }

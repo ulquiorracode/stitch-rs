@@ -185,3 +185,49 @@ pub fn data(_args: TokenStream, input: TokenStream) -> TokenStream {
     let item = parse_macro_input!(input as Item);
     quote! { #item }.into()
 }
+
+#[proc_macro_attribute]
+pub fn query(_args: TokenStream, input: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(input as Item);
+    match &item {
+        Item::Struct(s) => {
+            if let Err(e) = verify_suffix(&s.ident, "Query", SMA_TAXO_001) {
+                return e.to_compile_error().into();
+            }
+            if let Err(e) = inspect_struct_fields(&s.fields) {
+                return e.to_compile_error().into();
+            }
+            quote! { #item }.into()
+        }
+        Item::Impl(item_impl) => {
+            if let Err(e) = verify_query_impl(item_impl) {
+                return e.to_compile_error().into();
+            }
+            quote! { #item }.into()
+        }
+        _ => quote! { #item }.into(),
+    }
+}
+
+#[proc_macro_attribute]
+pub fn command(_args: TokenStream, input: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(input as Item);
+    match &item {
+        Item::Struct(s) => {
+            if let Err(e) = verify_suffix(&s.ident, "Command", SMA_TAXO_001) {
+                return e.to_compile_error().into();
+            }
+            if let Err(e) = inspect_struct_fields(&s.fields) {
+                return e.to_compile_error().into();
+            }
+            quote! { #item }.into()
+        }
+        Item::Impl(item_impl) => {
+            if let Err(e) = verify_command_impl(item_impl) {
+                return e.to_compile_error().into();
+            }
+            quote! { #item }.into()
+        }
+        _ => quote! { #item }.into(),
+    }
+}
