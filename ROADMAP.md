@@ -59,3 +59,14 @@
   - [x] Implement `StatelessLayerTable`: Contiguous slice dispatcher for stateless plugins.
 - [x] **Peripheral Async Preparation (`stitch-core::outbox`)**:
   - [x] Fixed-capacity stack-allocated `Outbox<TEvent, CAP>` buffer for zero-alloc event draining from synchronous terminals.
+
+## Phase 4: Async Pipelines & Autonomous Egress (v0.4.0)
+
+- [ ] **Dedicated `stitch-async` Crate**:
+  - [ ] Implement `AsyncPipeline` with zero heap allocation per tick using RPITIT / `async fn in traits` (Rust 1.85+).
+  - [ ] Zero-cost bridge between synchronous `#![no_std]` U-cycles and async runtimes (Tokio / embassy / smol).
+  - [ ] Event-driven egress worker consuming `Outbox` batches via channel streaming without blocking hot simulation frames.
+- [ ] **Cross-Platform Benchmarking Suite**:
+  - [ ] Integrate Hyperfine, cargo-flamegraph, and DHAT profiling harnesses across benchmarks.
+  - [ ] Rigorous cache miss, branch misprediction, and heap allocation ledger reporting.
+
