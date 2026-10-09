@@ -1,0 +1,5 @@
+error: [SMA-SCROOGE-010] Scrooge Violation: Prohibited heap-allocated type `String` in hot-path field `bad_string`. Use static buffers, ArrayString, or inline slices.
+ --> tests/ui/02_heap_ban.rs:6:21
+  |
+6 |     pub bad_string: String,
+  |                     ^^^^^^

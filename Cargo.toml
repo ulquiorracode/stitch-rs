@@ -1,14 +1,81 @@
-[package]
-name = "stitch-rs"
-version = "0.1.0"
+[workspace]
+members = [
+    "crates/stitch-core",
+    "crates/stitch-macros",
+    "crates/stitch-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.2.0"
 edition = "2024"
-authors = ["Stitch Contributors"]
+rust-version = "1.85.0"
+authors = ["Stitch Contributors", "GoldSrc.rs Systems Architects"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/ulquiorracode/stitch-rs"
-description = "Zero-Cost, Monomorphic U-Cycle Middleware Pipeline Framework (The Sewing Machine Architecture)"
-keywords = ["pipeline", "middleware", "u-cycle", "cqs", "monomorphic"]
-categories = ["rust-patterns", "no-std", "asynchronous"]
+homepage = "https://github.com/ulquiorracode/stitch-rs"
+documentation = "https://docs.rs/stitch-rs"
+readme = "README.md"
+keywords = ["pipeline", "middleware", "u-cycle", "sma", "zero-cost"]
+categories = ["rust-patterns", "no-std", "embedded"]
+
+[workspace.dependencies]
+stitch-core = { path = "crates/stitch-core", version = "0.2.0", default-features = false }
+stitch-macros = { path = "crates/stitch-macros", version = "0.2.0" }
+stitch-cli = { path = "crates/stitch-cli", version = "0.2.0" }
+
+syn = { version = "2.0", features = ["full", "visit", "extra-traits"] }
+quote = "1.0"
+proc-macro2 = { version = "1.0", features = ["span-locations"] }
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+rayon = "1.10"
+walkdir = "2.5"
+trybuild = "1.0"
+miette = { version = "7.5", features = ["fancy"] }
+
+[package]
+name = "stitch-rs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Zero-Cost, Monomorphic U-Cycle Middleware Pipeline Framework implementing The Sewing Machine Architecture (SMA)"
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
 
 [features]
-default = ["std"]
-std = []
+default = ["std", "macros"]
+std = ["stitch-core/std"]
+macros = ["dep:stitch-macros"]
+
+[dependencies]
+stitch-core = { workspace = true }
+stitch-macros = { workspace = true, optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false }
+tower = { version = "0.5", default-features = false, features = ["util"] }
+
+[[bench]]
+name = "pipeline_bench"
+harness = false
+
+[[example]]
+name = "01_auth_logging_u_cycle"
+required-features = ["macros", "std"]
+
+[[example]]
+name = "02_cache_short_circuit"
+required-features = ["macros", "std"]
+
+[[example]]
+name = "03_no_std_embedded"
+required-features = ["macros"]
+
+

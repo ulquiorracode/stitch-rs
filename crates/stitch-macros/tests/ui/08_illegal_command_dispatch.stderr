@@ -1,0 +1,21 @@
+error[E0599]: the associated function or constant `for_command` exists for struct `Pipeline<Context, NotACommand, (), (), _>`, but its trait bounds were not satisfied
+  --> tests/ui/08_illegal_command_dispatch.rs:11:62
+   |
+ 8 | struct NotACommand;
+   | ------------------ doesn't satisfy `NotACommand: stitch_core::Command<Context, (), ()>`
+...
+11 |     let _pipe = Pipeline::<Context, NotACommand, (), (), _>::for_command();
+   |                                                              ^^^^^^^^^^^ associated function or constant cannot be called on `Pipeline<Context, NotACommand, (), (), _>` due to unsatisfied trait bounds
+   |
+note: if you're trying to build a new `Pipeline<Context, NotACommand, (), (), _>`, consider using `Pipeline::<TCtx, TIntent, TOutcome, TErr, TerminalNode<TTerm>>::on_terminal` which returns `Pipeline<_, _, _, _, TerminalNode<_>>`
+  --> $WORKSPACE/crates/stitch-core/src/pipeline.rs
+   |
+   |     pub const fn on_terminal(terminal: TTerm) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: the following trait bounds were not satisfied:
+           `NotACommand: stitch_core::Command<Context, (), ()>`
+note: the trait `stitch_core::Command` must be implemented
+  --> $WORKSPACE/crates/stitch-core/src/cqs.rs
+   |
+   | pub trait Command<TCtx, TOutcome, TErr> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

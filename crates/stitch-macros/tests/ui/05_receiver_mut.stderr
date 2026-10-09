@@ -1,0 +1,13 @@
+error: [SMA-CONCUR-040] Concurrency contract violation: Layer traversal methods must receive immutable `&self` to guarantee stateless re-entrancy.
+  --> tests/ui/05_receiver_mut.rs:11:9
+   |
+11 |     pub fn on_enter(&mut self, _ctx: &mut DummyContext) -> FlowControl<(), (), ()> {
+   |         ^^
+
+warning: unused import: `stitch_core::flow::FlowControl`
+ --> tests/ui/05_receiver_mut.rs:1:5
+  |
+1 | use stitch_core::flow::FlowControl;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default

@@ -1,0 +1,19 @@
+error: [SMA-HOTPATH-020] Scrooge Violation: Macro `panic!` performs heap allocations, panics, or I/O blocking inside hot path.
+  --> tests/ui/11_panic_in_on_exit.rs:18:9
+   |
+18 |         panic!("Panic in on_exit violates total execution contract");
+   |         ^^^^^
+
+warning: unused import: `stitch_core::flow::FlowControl`
+ --> tests/ui/11_panic_in_on_exit.rs:1:5
+  |
+1 | use stitch_core::flow::FlowControl;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `stitch_core::middleware::Layer`
+ --> tests/ui/11_panic_in_on_exit.rs:2:5
+  |
+2 | use stitch_core::middleware::Layer;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

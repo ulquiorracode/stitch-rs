@@ -1,0 +1,53 @@
+# ==============================================================================
+# STITCH-RS / SEWING MACHINE ARCHITECTURE (SMA) CONFIGURATION
+# ==============================================================================
+[workspace]
+schema_version = "1.0.0"
+root = "."
+topology = "hexagonal"
+
+# ------------------------------------------------------------------------------
+# GLOBAL RULE SEVERITY: "deny" | "warn" | "allow"
+# ------------------------------------------------------------------------------
+[rules]
+# Taxonomy & Suffixes
+TAXO-SUFFIX-LAYER      = "deny"
+TAXO-SUFFIX-PORT       = "deny"
+TAXO-SUFFIX-ADAPTER    = "deny"
+TAXO-SUFFIX-TERMINAL   = "deny"
+TAXO-SUFFIX-TOKEN      = "deny"
+TAXO-SUFFIX-ID         = "deny"
+TAXO-SUFFIX-BLACKBOARD = "deny"
+
+# Scrooge Memory Invariants
+SCROOGE-HEAP-HOTPATH   = "deny"
+SCROOGE-DYNAMIC-DISP   = "deny"
+SCROOGE-CACHE-ALIGN    = "deny"
+SCROOGE-TOKEN-SIZE     = "deny"
+SCROOGE-PADDING-HOLE   = "warn"
+
+# Hot-Path Code Invariants
+HOTPATH-ALLOC-MACRO    = "deny"
+HOTPATH-ALLOC-METHOD   = "deny"
+HOTPATH-PANIC          = "deny"
+HOTPATH-BLOCKING-IO    = "deny"
+
+# Boundary & Topology
+BOUND-INVERSION        = "deny"
+BOUND-DIRECT-ADAPTER   = "deny"
+BOUND-FFI-LEAK         = "deny"
+BOUND-COLOCATION       = "deny"
+
+# Concurrency & Receivers
+CONCUR-RECEIVER-MUT    = "deny"
+
+# ------------------------------------------------------------------------------
+# SCROOGE MECHANICAL TUNING
+# ------------------------------------------------------------------------------
+[scrooge]
+cache_line_bytes       = 64
+max_padding_waste_pct  = 15.0
+forbid_heap_types      = [
+    "String", "Vec", "Box", "Arc", "Rc", "BTreeMap", "HashMap", "HashSet",
+    "LinkedList", "VecDeque", "CString", "OsString", "PathBuf"
+]

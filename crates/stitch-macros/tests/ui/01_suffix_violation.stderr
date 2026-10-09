@@ -1,0 +1,5 @@
+error: [SMA-TAXO-001] Architectural violation: Type `InvalidHandler` must have suffix `Layer`.
+ --> tests/ui/01_suffix_violation.rs:4:12
+  |
+4 | pub struct InvalidHandler;
+  |            ^^^^^^^^^^^^^^
