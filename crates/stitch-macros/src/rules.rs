@@ -21,6 +21,9 @@ pub const SMA_HOTPATH_024: &str = "SMA-HOTPATH-024";
 
 pub const SMA_CONCUR_040: &str = "SMA-CONCUR-040";
 
+pub const SMA_CQS_050: &str = "SMA-CQS-050";
+pub const SMA_CQS_051: &str = "SMA-CQS-051";
+
 pub const FORBIDDEN_HEAP_TYPES: &[&str] = &[
     "String",
     "Vec",

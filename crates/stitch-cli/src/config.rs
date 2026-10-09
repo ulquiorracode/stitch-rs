@@ -242,6 +242,9 @@ impl Default for StitchConfig {
 
         rules.insert("CONCUR-RECEIVER-MUT".to_string(), RuleSeverity::Deny);
 
+        rules.insert("CQS-QUERY-MUTATION".to_string(), RuleSeverity::Deny);
+        rules.insert("CQS-HYBRID-ROLE".to_string(), RuleSeverity::Deny);
+
         rules.insert("SMA-IO-001".to_string(), RuleSeverity::Deny);
         rules.insert("SMA-IO-002".to_string(), RuleSeverity::Deny);
         rules.insert("SMA-PARSE-001".to_string(), RuleSeverity::Deny);
@@ -357,6 +360,16 @@ impl StitchConfig {
                     .rules
                     .get(rule_code)
                     .or_else(|| scope.rules.get(canonical))
+                    .or_else(|| {
+                        // Reverse lookup from canonical to user key
+                        scope.rules.iter().find_map(|(k, v)| {
+                            if canonical_rule_key(k) == canonical {
+                                Some(v)
+                            } else {
+                                None
+                            }
+                        })
+                    })
                 {
                     return *sev;
                 }
@@ -414,6 +427,8 @@ pub fn canonical_rule_key(key: &str) -> &'static str {
         "SMA-BOUND-033" | "BOUND-COLOCATION" => "SMA-BOUND-033",
         "SMA-CONCUR-040" | "CONCUR-RECEIVER-MUT" => "SMA-CONCUR-040",
         "SMA-CONCUR-041" | "CONCUR-STATIC-MUT" => "SMA-CONCUR-041",
+        "SMA-CQS-050" | "CQS-QUERY-MUTATION" => "SMA-CQS-050",
+        "SMA-CQS-051" | "CQS-HYBRID-ROLE" => "SMA-CQS-051",
         "SMA-IO-001" | "IO-READ-ERROR" => "SMA-IO-001",
         "SMA-IO-002" | "IO-MANIFEST-ERROR" => "SMA-IO-002",
         "SMA-PARSE-001" | "PARSE-SYNTAX-ERROR" => "SMA-PARSE-001",
@@ -424,7 +439,10 @@ pub fn canonical_rule_key(key: &str) -> &'static str {
 
 pub fn glob_match(pattern: &str, path: &str) -> bool {
     let norm_pat = pattern.replace('\\', "/");
-    let norm_path = path.replace('\\', "/");
+    let mut norm_path = path.replace('\\', "/");
+    if norm_path.starts_with("./") {
+        norm_path = norm_path[2..].to_string();
+    }
 
     if norm_pat.contains('*') || norm_pat.contains('?') {
         glob_match_recursive(norm_pat.as_bytes(), norm_path.as_bytes())

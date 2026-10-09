@@ -5,6 +5,27 @@ All notable changes to `stitch-rs` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-10-09
+
+### Added
+
+- **Unified CQS Protocol (`stitch-core::cqs`)**:
+  - Reintroduced formal, verified `Query<TCtx, TResult, TErr>` trait guaranteeing strictly immutable `&TCtx` context execution.
+  - Implemented typed `Pipeline::for_query()` constructor ensuring pipelines dispatch query intents exclusively.
+  - Linear witness capability token `CommandPermit<'a>` preventing interior mutability leaks (`RefCell`, `Mutex`) during query execution.
+  - Fine-grained property CQS contracts `PropRead<Target>` and `PropWrite<Target>`.
+- **Triple-Shield CQS Architecture-as-Code Enforcement**:
+  - Procedural macros `#[stitch::query]` and `#[stitch::command]`.
+  - Architecture linter rule `SMA-CQS-050` rejecting mutable references `&mut` in query methods across both `stitch-macros` and `stitch-cli`.
+  - CLI category filter support: `stitch check --category cqs` or `stitch check --cqs`.
+- **Zero-Alloc Dynamic Middleware Alternatives**:
+  - `define_layer_enum!` macro: Closed-set enum dispatch achieving **~1.48 ns** (3.3x faster than `Box<dyn Layer>` at ~4.87 ns).
+  - `StatelessLayerTable`: Contiguous flat slice of function pointers for dynamically configured plugins in zero-alloc contiguous memory.
+- **Peripheral Async Outbox Pattern**:
+  - Stack-allocated, fixed-capacity ring buffer `Outbox<TEvent, const CAP: usize>` for staging domain events in synchronous U-cycle terminals without heap allocation.
+- **Criterion Benchmark Suite**:
+  - Added empirical benchmarks for `stitch_layer_enum` and `stitch_stateless_table`.
+
 ## [0.2.0] - 2026-10-09
 
 ### Added

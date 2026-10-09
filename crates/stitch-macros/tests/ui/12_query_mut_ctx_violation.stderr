@@ -1,0 +1,5 @@
+error: [SMA-CQS-050] CQS Violation: Query method `query` cannot accept mutable references `&mut`. Queries must be pure reads.
+ --> tests/ui/12_query_mut_ctx_violation.rs:9:25
+  |
+9 |     pub fn query(&self, _ctx: &mut MaterialContext) -> Result<(), ()> {
+  |                         ^^^^

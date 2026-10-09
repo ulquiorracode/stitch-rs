@@ -220,7 +220,68 @@ fn bench_pipeline_throughput(c: &mut Criterion) {
         })
     });
 
-    // 4. Tower Service
+    // 4. Closed-Set Enum Dispatch (define_layer_enum!)
+    stitch_rs::define_layer_enum! {
+        enum BenchDynamicLayer<BenchContext, Intent, u64, ()> {
+            A(LayerA),
+            B(LayerB),
+        }
+    }
+
+    let mut enum_pipe = Pipeline::on_terminal(BenchTerminal)
+        .wrap(BenchDynamicLayer::B(LayerB))
+        .wrap(BenchDynamicLayer::A(LayerA));
+    let mut enum_ctx = BenchContext { val: 0 };
+
+    group.bench_function("stitch_layer_enum", |b| {
+        b.iter(|| {
+            let res = enum_pipe.dispatch(black_box(&mut enum_ctx), black_box(Intent(42)));
+            black_box(res)
+        })
+    });
+
+    // 5. StatelessLayerTable Contiguous Dispatch
+    fn enter_a(ctx: &mut BenchContext, intent: Intent) -> FlowControl<Intent, u64, ()> {
+        ctx.val = ctx.val.wrapping_add(intent.0);
+        FlowControl::Proceed(intent)
+    }
+    fn exit_a(ctx: &mut BenchContext, outcome: &mut Result<u64, ()>) {
+        if let Ok(val) = outcome {
+            ctx.val = ctx.val.wrapping_add(*val);
+        }
+    }
+    fn enter_b(ctx: &mut BenchContext, intent: Intent) -> FlowControl<Intent, u64, ()> {
+        ctx.val = ctx.val.wrapping_add(1);
+        FlowControl::Proceed(intent)
+    }
+    fn exit_b(_ctx: &mut BenchContext, outcome: &mut Result<u64, ()>) {
+        if let Ok(val) = outcome {
+            *val = val.wrapping_mul(2);
+        }
+    }
+
+    let table_elements = [
+        StatelessLayer {
+            on_enter_fn: enter_a,
+            on_exit_fn: exit_a,
+        },
+        StatelessLayer {
+            on_enter_fn: enter_b,
+            on_exit_fn: exit_b,
+        },
+    ];
+    let table = StatelessLayerTable::new(&table_elements);
+    let mut table_pipe = Pipeline::on_terminal(BenchTerminal).wrap(table);
+    let mut table_ctx = BenchContext { val: 0 };
+
+    group.bench_function("stitch_stateless_table", |b| {
+        b.iter(|| {
+            let res = table_pipe.dispatch(black_box(&mut table_ctx), black_box(Intent(42)));
+            black_box(res)
+        })
+    });
+
+    // 6. Tower Service
     let mut tower_service = TowerMiddleware {
         inner: TowerMiddleware { inner: TowerLeaf },
     };

@@ -41,22 +41,32 @@
 
 ---
 
-## v0.3.0 — Unified CQS Protocol & Zero-Alloc Dynamic Middleware ⏳
+## v0.3.0 — Unified CQS Protocol & Zero-Alloc Dynamic Middleware ✅
 
 **Goal:** Bridge macro and micro-level CQS with GoldSrc.rs, establish triple-shield Architecture-as-Code CQS enforcement, and introduce high-performance zero-alloc dynamic dispatch alternatives.
 
-- [ ] **Unified CQS Protocol (`stitch-core::cqs`)**:
-  - [ ] Reintroduce formal, verified `Query<TCtx, TResult, TErr>` with strict `&TCtx` immutable semantics.
-  - [ ] Implement `CommandPermit` linear capability token to prevent interior mutability bypasses (`RefCell`, `Mutex`) during queries.
-  - [ ] Universal property-level CQS traits (`PropRead<Target>`, `PropWrite<Target>`) bridging `GoldSrc.rs` `PropGet`/`PropSet`.
-- [ ] **Triple-Shield CQS Enforcement (`stitch-macros` & `stitch-cli`)**:
-  - [ ] `#[stitch::query]` macro: Rejects mutable parameters, interior mutability locks, and assignment expressions at compile time.
-  - [ ] `#[stitch::command]` macro: Validates mutable execution semantics and command naming conventions.
-  - [ ] Rule `SMA-CQS-050`: AST linter checks prohibiting illegal state mutations in queries repository-wide.
-  - [ ] Rule `SMA-CQS-051`: Static check prohibiting hybrid types implementing both `Query` and `Command`.
-- [ ] **Zero-Alloc Dynamic Middleware Alternatives**:
-  - [ ] Implement `define_layer_enum!` macro: Closed-set enum dispatch achieving **~1.75 ns** (3x faster than `Box<dyn Layer>`).
-  - [ ] Implement `StatelessLayerTable`: Contiguous slice dispatcher for stateless plugins achieving **~2.95 ns**.
-- [ ] **Peripheral Async Preparation (`stitch-async` Proof-of-Concept)**:
-  - [ ] Ingress/egress adapter design for async runtime integration.
-  - [ ] Fixed-capacity stack-allocated `Outbox<TEvent, CAP>` buffer for zero-alloc event draining from synchronous terminals.
+- [x] **Unified CQS Protocol (`stitch-core::cqs`)**:
+  - [x] Reintroduce formal, verified `Query<TCtx, TResult, TErr>` with strict `&TCtx` immutable semantics.
+  - [x] Implement `CommandPermit` linear capability token to prevent interior mutability bypasses (`RefCell`, `Mutex`) during queries.
+  - [x] Universal property-level CQS traits (`PropRead<Target>`, `PropWrite<Target>`) bridging `GoldSrc.rs` `PropGet`/`PropSet`.
+- [x] **Triple-Shield CQS Enforcement (`stitch-macros` & `stitch-cli`)**:
+  - [x] `#[stitch::query]` macro: Rejects mutable parameters, interior mutability locks, and assignment expressions at compile time.
+  - [x] `#[stitch::command]` macro: Validates mutable execution semantics and command naming conventions.
+  - [x] Rule `SMA-CQS-050`: AST linter checks prohibiting illegal state mutations in queries repository-wide.
+  - [x] Rule `SMA-CQS-051`: Static check prohibiting hybrid types implementing both `Query` and `Command`.
+- [x] **Zero-Alloc Dynamic Middleware Alternatives**:
+  - [x] Implement `define_layer_enum!` macro: Closed-set enum dispatch achieving **~1.48 ns** (3.3x faster than `Box<dyn Layer>`).
+  - [x] Implement `StatelessLayerTable`: Contiguous slice dispatcher for stateless plugins.
+- [x] **Peripheral Async Preparation (`stitch-core::outbox`)**:
+  - [x] Fixed-capacity stack-allocated `Outbox<TEvent, CAP>` buffer for zero-alloc event draining from synchronous terminals.
+
+## Phase 4: Async Pipelines & Autonomous Egress (v0.4.0)
+
+- [ ] **Dedicated `stitch-async` Crate**:
+  - [ ] Implement `AsyncPipeline` with zero heap allocation per tick using RPITIT / `async fn in traits` (Rust 1.85+).
+  - [ ] Zero-cost bridge between synchronous `#![no_std]` U-cycles and async runtimes (Tokio / embassy / smol).
+  - [ ] Event-driven egress worker consuming `Outbox` batches via channel streaming without blocking hot simulation frames.
+- [ ] **Cross-Platform Benchmarking Suite**:
+  - [ ] Integrate Hyperfine, cargo-flamegraph, and DHAT profiling harnesses across benchmarks.
+  - [ ] Rigorous cache miss, branch misprediction, and heap allocation ledger reporting.
+

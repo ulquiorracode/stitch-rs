@@ -41,6 +41,10 @@ BOUND-COLOCATION       = "deny"
 # Concurrency & Receivers
 CONCUR-RECEIVER-MUT    = "deny"
 
+# Command-Query Separation (CQS)
+CQS-QUERY-MUTATION     = "deny"
+CQS-HYBRID-ROLE        = "deny"
+
 # ------------------------------------------------------------------------------
 # SCROOGE MECHANICAL TUNING
 # ------------------------------------------------------------------------------
@@ -51,3 +55,21 @@ forbid_heap_types      = [
     "String", "Vec", "Box", "Arc", "Rc", "BTreeMap", "HashMap", "HashSet",
     "LinkedList", "VecDeque", "CString", "OsString", "PathBuf"
 ]
+
+# ------------------------------------------------------------------------------
+# SCOPE OVERRIDES (Examples, Tests, Benches)
+# ------------------------------------------------------------------------------
+[scopes."examples/**"]
+rules = { HOTPATH-ALLOC-MACRO = "allow", HOTPATH-BLOCKING-IO = "allow" }
+
+[scopes."benches/**"]
+rules = { SCROOGE-CACHE-ALIGN = "allow" }
+
+[scopes."crates/stitch-macros/tests/**"]
+rules = { SCROOGE-HEAP-HOTPATH = "allow", SCROOGE-CACHE-ALIGN = "allow" }
+
+[scopes."crates/stitch-core/src/lib.rs"]
+rules = { HOTPATH-PANIC = "allow" }
+
+[scopes."crates/stitch-core/src/cqs.rs"]
+rules = { SCROOGE-CACHE-ALIGN = "allow" }
