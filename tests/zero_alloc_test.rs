@@ -33,7 +33,8 @@ impl TrackingAllocator {
 unsafe impl GlobalAlloc for TrackingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         self.alloc_count.fetch_add(1, Ordering::SeqCst);
-        self.allocated_bytes.fetch_add(layout.size(), Ordering::SeqCst);
+        self.allocated_bytes
+            .fetch_add(layout.size(), Ordering::SeqCst);
         unsafe { System.alloc(layout) }
     }
 
@@ -87,7 +88,6 @@ impl Terminal<BenchContext, Intent, u64, ()> for BenchTerminal {
     }
 }
 
-
 #[test]
 fn verify_strictly_zero_heap_allocations_on_u_cycle() {
     let mut pipe = Pipeline::on_terminal(BenchTerminal)
@@ -105,6 +105,12 @@ fn verify_strictly_zero_heap_allocations_on_u_cycle() {
     }
 
     let (allocs, bytes) = ALLOC.counts();
-    assert_eq!(allocs, 0, "Monomorphic U-cycle violated zero-allocation contract: performed {allocs} heap allocations");
-    assert_eq!(bytes, 0, "Monomorphic U-cycle allocated {bytes} bytes of heap memory");
+    assert_eq!(
+        allocs, 0,
+        "Monomorphic U-cycle violated zero-allocation contract: performed {allocs} heap allocations"
+    );
+    assert_eq!(
+        bytes, 0,
+        "Monomorphic U-cycle allocated {bytes} bytes of heap memory"
+    );
 }
