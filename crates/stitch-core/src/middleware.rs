@@ -20,6 +20,13 @@ pub trait Layer<TCtx, TIntent = (), TOutcome = (), TErr = ()> {
     ///
     /// Observes the outcome emerging from the layer below and tightens the pipeline
     /// (e.g. emits diffs, records telemetry, triggers reactions).
+    ///
+    /// # Total Function Contract (Panic Prohibition)
+    ///
+    /// Implementations of `on_exit` **must never panic** under any circumstances.
+    /// It operates strictly over an already produced `&mut Result<TOutcome, TErr>`.
+    /// Panicking during ascent violates total execution guarantees, leaves enclosing
+    /// layers unclosed, and poisons the material context.
     fn on_exit(&self, ctx: &mut TCtx, outcome: &mut Result<TOutcome, TErr>);
 }
 

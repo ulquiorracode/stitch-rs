@@ -244,4 +244,38 @@ mod tests {
         assert_eq!(ctx.audit_len, 1);
         assert_eq!(ctx.audit[0], "Denied by SelfAuditingHaltLayer");
     }
+
+    #[cfg(feature = "std")]
+    struct PanickingLayer;
+
+    #[cfg(feature = "std")]
+    impl Layer<TestBlackboard, MathIntent, u64, &'static str> for PanickingLayer {
+        fn on_enter(
+            &self,
+            _ctx: &mut TestBlackboard,
+            _intent: MathIntent,
+        ) -> FlowControl<MathIntent, u64, &'static str> {
+            panic!("Deliberate layer panic to test isolation barrier");
+        }
+
+        fn on_exit(&self, _ctx: &mut TestBlackboard, _outcome: &mut Result<u64, &'static str>) {}
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn test_dispatch_isolated_catches_unwind_barrier() {
+        let mut ctx = TestBlackboard {
+            state: 0,
+            audit_len: 0,
+            audit: [""; 4],
+        };
+
+        let mut pipeline = Pipeline::on_terminal(MathTerminal).wrap(PanickingLayer);
+
+        let isolated_res = pipeline.dispatch_isolated(&mut ctx, MathIntent::Add(42));
+        assert!(
+            isolated_res.is_err(),
+            "dispatch_isolated must catch unwind without process abort"
+        );
+    }
 }

@@ -46,7 +46,7 @@ impl<'ast> Visit<'ast> for HotPathAstVisitor {
 
         match macro_name.as_str() {
             "format" | "vec" | "println" | "eprintln" | "panic" | "dbg" | "todo"
-            | "unimplemented" => {
+            | "unimplemented" | "unreachable" => {
                 self.violations.push(Error::new(
                     i.path.span(),
                     format!(

@@ -491,6 +491,7 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
                     | "dbg"
                     | "todo"
                     | "unimplemented"
+                    | "unreachable"
             )
         {
             self.record(

@@ -125,6 +125,20 @@ where
     TChain: PipelineChain<TCtx, TIntent, TOutcome, TErr>,
 {
     /// Dispatches an intent through the entire pipeline: **Result = Pipeline::dispatch(Material, Intent)**.
+    ///
+    /// # Panic & Resilience Policy (Contract Invariant M7)
+    ///
+    /// - **No ScopeGuards by Design**: The core U-cycle does **not** employ RAII scope guards
+    ///   or abort-prone cleanup destructors during stack unwinding. A secondary panic in a destructor
+    ///   would unconditionally abort the entire host process.
+    /// - **Unwinding Aborts Traversal**: A panic occurring in any layer or terminal immediately
+    ///   bypasses remaining descent and outer ascent phases. The material context `ctx` is left in an
+    ///   unspecified/poisoned state.
+    /// - **Application Re-entry**: Re-entering the pipeline after an uncaught panic is an application-level
+    ///   contract violation.
+    /// - **Host Isolation Barrier**: In userspace / host applications (e.g., FFI, plugin hosts, or servers),
+    ///   use [`dispatch_isolated`](Self::dispatch_isolated) (enabled via the `std` feature) to catch unwinds
+    ///   at the perimeter boundary and translate them into typed failure states without taking down the process.
     #[inline(always)]
     pub fn dispatch(&mut self, ctx: &mut TCtx, intent: TIntent) -> Result<TOutcome, TErr> {
         let () = TCtx::ASSERT_CACHE_ALIGNED;
@@ -135,6 +149,34 @@ where
     #[inline(always)]
     pub fn stitch(&mut self, ctx: &mut TCtx, intent: TIntent) -> Result<TOutcome, TErr> {
         self.dispatch(ctx, intent)
+    }
+
+    /// Dispatches an intent within an isolated `catch_unwind` error barrier.
+    ///
+    /// Available strictly under `feature = "std"`.
+    ///
+    /// Intercepts any panics originating from downstream layers or the terminal,
+    /// preventing unwinds from crossing foreign C-ABI / FFI or host boundaries.
+    ///
+    /// Returns:
+    /// - `Ok(Ok(outcome))` on successful U-cycle traversal,
+    /// - `Ok(Err(err))` on standard domain / `Halt` error,
+    /// - `Err(Box<dyn Any + Send>)` if a layer or terminal panicked.
+    #[cfg(feature = "std")]
+    pub fn dispatch_isolated(
+        &mut self,
+        ctx: &mut TCtx,
+        intent: TIntent,
+    ) -> Result<Result<TOutcome, TErr>, std::boxed::Box<dyn core::any::Any + Send>>
+    where
+        TCtx: std::panic::UnwindSafe,
+        TIntent: std::panic::UnwindSafe,
+        Self: std::panic::UnwindSafe,
+    {
+        let () = TCtx::ASSERT_CACHE_ALIGNED;
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.chain.cycle(ctx, intent)
+        }))
     }
 }
 
