@@ -266,4 +266,50 @@ mod tests {
             "dispatch_isolated must catch unwind without process abort"
         );
     }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn test_poisoned_context_state_after_panic_and_safe_reinit() {
+        struct PoisoningLayer;
+        impl Layer<TestBlackboard, MathIntent, u64, &'static str> for PoisoningLayer {
+            fn on_enter(
+                &self,
+                ctx: &mut TestBlackboard,
+                _intent: MathIntent,
+            ) -> FlowControl<MathIntent, u64, &'static str> {
+                // Mutate context half-way before panicking (simulating interrupted transaction)
+                ctx.state = 999;
+                ctx.audit[0] = "halfway_dirty_state";
+                ctx.audit_len = 1;
+                panic!("Catastrophic worker fault inside layer");
+            }
+            fn on_exit(&self, _ctx: &mut TestBlackboard, _outcome: &mut Result<u64, &'static str>) {
+            }
+        }
+
+        let mut ctx = TestBlackboard {
+            state: 10,
+            audit_len: 0,
+            audit: [""; 4],
+        };
+
+        let mut failing_pipe = Pipeline::on_terminal(MathTerminal).wrap(PoisoningLayer);
+        let res = failing_pipe.dispatch_isolated(&mut ctx, MathIntent::Add(5));
+        assert!(res.is_err(), "Must intercept unwind barrier");
+
+        // Contract Invariant M7 verification:
+        // Traversal was aborted immediately; context was left in mutated/poisoned state
+        assert_eq!(ctx.state, 999, "State reflects dirty partial mutation");
+        assert_eq!(ctx.audit[0], "halfway_dirty_state");
+
+        // Safe operational lifecycle: re-entering requires explicit context reinitialization / sanitization
+        ctx.state = 0;
+        ctx.audit_len = 0;
+        ctx.audit = [""; 4];
+
+        let mut clean_pipe = Pipeline::on_terminal(MathTerminal);
+        let clean_res = clean_pipe.dispatch(&mut ctx, MathIntent::Add(15));
+        assert_eq!(clean_res, Ok(15));
+        assert_eq!(ctx.state, 15);
+    }
 }

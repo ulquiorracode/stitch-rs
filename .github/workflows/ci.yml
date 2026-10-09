@@ -59,3 +59,11 @@ jobs:
         run: cargo doc --workspace --no-deps --no-default-features
       - name: Check rustdoc (all-features)
         run: cargo doc --workspace --no-deps --all-features
+
+  audit:
+    name: Security & License Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
