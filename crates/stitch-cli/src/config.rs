@@ -580,7 +580,7 @@ pub fn collect_rust_files<'a>(
                     && !name.ends_with("bindings_pregenerated.rs"))
         })
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"))
+        .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "rs"))
         .filter(move |e| {
             if let Some(scope) = scope {
                 scope.is_file_relevant(e.path())
