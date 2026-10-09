@@ -17,12 +17,12 @@ use std::path::Path;
 pub struct HealthReport {
     pub composite_score: f64,
     pub grade: String,
-    pub passed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
     pub dimensions: HealthDimensions,
     pub penalties: Vec<HealthPenalty>,
     pub recommendations: Vec<String>,
+    pub passed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
