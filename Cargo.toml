@@ -25,7 +25,7 @@ stitch-core = { path = "crates/stitch-core", version = "0.3.0", default-features
 stitch-macros = { path = "crates/stitch-macros", version = "0.3.0" }
 stitch-async = { path = "crates/stitch-async", version = "0.3.0", default-features = false }
 stitch-cli = { path = "crates/stitch-cli", version = "0.3.0" }
-machine-core = { path = "../machine-rs/crates/machine-core", version = "0.1.0", default-features = false }
+machine-core = { git = "https://github.com/ulquiorracode/machine-rs.git", branch = "dev", version = "0.1.0", default-features = false }
 
 
 syn = { version = "2.0", features = ["full", "visit", "extra-traits"] }
