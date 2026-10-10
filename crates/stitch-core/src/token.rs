@@ -18,8 +18,8 @@ pub trait StitchToken:
             "SMA-SCROOGE-013: Token type must be strictly 8 bytes (64 bits)."
         );
         assert!(
-            core::mem::align_of::<Self>() == 8,
-            "SMA-SCROOGE-013: Token type must have 8-byte alignment."
+            core::mem::align_of::<Self>() == core::mem::align_of::<u64>(),
+            "SMA-SCROOGE-013: Token type must match target architecture u64 alignment."
         );
     };
 
@@ -50,8 +50,8 @@ pub trait StitchId:
             "SMA-SCROOGE-013: Id type must be strictly 8 bytes (64 bits)."
         );
         assert!(
-            core::mem::align_of::<Self>() == 8,
-            "SMA-SCROOGE-013: Id type must have 8-byte alignment."
+            core::mem::align_of::<Self>() == core::mem::align_of::<u64>(),
+            "SMA-SCROOGE-013: Id type must match target architecture u64 alignment."
         );
     };
 
@@ -117,9 +117,9 @@ impl<T: StitchToken> StitchId for RawId<T> {
 // Compile-time static assertions verifying register-fit invariants
 const _: () = {
     assert!(core::mem::size_of::<RawToken>() == 8);
-    assert!(core::mem::align_of::<RawToken>() == 8);
+    assert!(core::mem::align_of::<RawToken>() == core::mem::align_of::<u64>());
     assert!(core::mem::size_of::<RawId<RawToken>>() == 8);
-    assert!(core::mem::align_of::<RawId<RawToken>>() == 8);
+    assert!(core::mem::align_of::<RawId<RawToken>>() == core::mem::align_of::<u64>());
 };
 
 #[cfg(test)]
