@@ -1,0 +1,24 @@
+[package]
+name = "stitch-async"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Zero-Cost, Monomorphic Asynchronous U-Cycle Middleware Pipeline & Outbox Streaming Egress Framework"
+keywords = ["async", "pipeline", "middleware", "u-cycle", "egress"]
+categories = ["asynchronous", "rust-patterns"]
+readme = "README.md"
+
+[features]
+default = ["std"]
+std = ["stitch-core/std"]
+machine = ["dep:machine-core"]
+
+[dependencies]
+stitch-core = { workspace = true }
+machine-core = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.43", default-features = false, features = ["macros", "rt", "sync"] }
