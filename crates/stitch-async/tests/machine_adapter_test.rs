@@ -1,3 +1,5 @@
+#![cfg(feature = "machine")]
+
 use machine_core::prelude::*;
 use stitch_async::machine_adapter::{MachineTerminal, PipelineStepMachine};
 use stitch_async::prelude::*;
