@@ -152,7 +152,7 @@ pub fn verify_transparent(attrs: &[Attribute], span: proc_macro2::Span) -> Resul
     Ok(())
 }
 
-/// Synthesizes static compile-time assertions verifying 8-byte size and alignment for Tokens and IDs.
+/// Synthesizes static compile-time assertions verifying 8-byte size and target u64 alignment for Tokens and IDs.
 pub fn synthesize_register_size_assertion(ident: &Ident) -> proc_macro2::TokenStream {
     quote! {
         const _: () = {
@@ -161,8 +161,8 @@ pub fn synthesize_register_size_assertion(ident: &Ident) -> proc_macro2::TokenSt
                 concat!("SMA-SCROOGE-013: Struct `", stringify!(#ident), "` size must be exactly 8 bytes.")
             );
             assert!(
-                ::core::mem::align_of::<#ident>() == 8,
-                concat!("SMA-SCROOGE-013: Struct `", stringify!(#ident), "` alignment must be 8 bytes.")
+                ::core::mem::align_of::<#ident>() == ::core::mem::align_of::<u64>(),
+                concat!("SMA-SCROOGE-013: Struct `", stringify!(#ident), "` alignment must match target u64 alignment.")
             );
         };
     }
