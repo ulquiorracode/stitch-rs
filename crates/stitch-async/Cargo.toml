@@ -14,9 +14,11 @@ readme = "README.md"
 [features]
 default = ["std"]
 std = ["stitch-core/std"]
+machine = ["dep:machine-core"]
 
 [dependencies]
 stitch-core = { workspace = true }
+machine-core = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.43", default-features = false, features = ["macros", "rt", "sync"] }
