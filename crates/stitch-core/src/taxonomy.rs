@@ -1,9 +1,15 @@
 //! Rigid Hexagonal Taxonomy contracts for Sewing Machine Architecture (SMA).
 //!
-//! Enforces clean separation of policy from mechanism:
+//! Enforces clean separation of policy from mechanism through the canonical Triad:
+//!
+//! ```text
+//! [Port (Inward SPI)] <---> [Adapter (Bridge/Translator)] <---> [Provider (Engine/Runtime)]
+//! ```
+//!
 //! - **`Port`**: Pure abstract inward boundary (SPI). Zero foreign FFI types allowed.
-//! - **`Adapter`**: Vendor-specific implementation of a Port. Encapsulates FFI, null guards, and panic catches.
-//! - **`Hub`**: Fractal dual-role coordinator (Adapter inward to engine, Port outward to leaves).
+//! - **`Provider`**: External service, operating system resource, database, or native storage engine.
+//! - **`Adapter`**: Bidirectional bridge translating a `Port` to/from a `Provider`.
+//! - **`Hub`**: Composite or routing adapter multiplexing multiple child adapters across a shared port.
 
 /// Suffix Contract: Must end in `Port`.
 ///
@@ -16,13 +22,23 @@ pub trait Port: Send + Sync {}
 
 impl Port for () {}
 
-/// Suffix Contract: Must end in `Adapter`.
-///
-/// Platform-specific or vendor-specific implementation of a `Port`.
+/// Role/Suffix Contract: Represents an external source, service, or engine of truth.
 ///
 /// Principles:
-/// - Bridges external foreign runtimes (Metamod, ReAPI, Wasmtime, POSIX) to a safe Port trait.
+/// - Represents physical state, an external library, an OS subsystem, or an I/O driver.
+/// - Accessed exclusively through an [`Adapter`] implementing an inward [`Port`].
+pub trait Provider: Send + Sync {}
+
+impl Provider for () {}
+
+/// Suffix Contract: Must end in `Adapter`.
+///
+/// Bidirectional translation bridge connecting a [`Port`] to an external [`Provider`].
+///
+/// Principles:
+/// - Bridges external foreign runtimes (Metamod, ReAPI, Wasmtime, POSIX, SQLite, external configs) to a safe Port trait.
 /// - Encapsulates all `unsafe` blocks, null pointer checks, and panic boundaries (`catch_unwind`).
+/// - Replaces the legacy "Bridge" concept: any bridge is fundamentally an adapter to a provider.
 /// - Services and domain core logic must never depend directly on an `Adapter`.
 pub trait Adapter<P: Port + ?Sized = ()>: Send + Sync {
     /// The target port contract implemented or bridged by this adapter.
@@ -41,10 +57,10 @@ pub trait RequiresPort<P: Port + ?Sized> {
     fn port(&self) -> &P;
 }
 
-/// Suffix Contract: Must end in `Hub`.
+/// Composite or Routing Adapter Contract (formerly Hub).
 ///
-/// Fractal dual-role node acting as an Adapter inward towards the core runtime,
-/// and as a Port outward towards downstream services, blackboards, and pipeline layers.
+/// Acts as a composite adapter multiplexing multiple child adapters, routing calls,
+/// or fanning out pipeline events across downstream layers.
 pub trait Hub: Send + Sync {}
 
 #[cfg(test)]
