@@ -434,6 +434,26 @@ impl<'a, 'ast> Visit<'ast> for AstScanner<'a> {
             self.check_heap_fields(&i.fields, &ident_str);
         }
 
+        // 6. Adapter Check
+        if has_attr(&i.attrs, "adapter") && !ident_str.ends_with("Adapter") {
+            self.record(
+                "SMA-TAXO-004",
+                span,
+                format!("Adapter `{ident_str}` must have suffix `Adapter`."),
+                None,
+            );
+        }
+
+        // 7. Provider Check
+        if has_attr(&i.attrs, "provider") && !ident_str.ends_with("Provider") {
+            self.record(
+                "SMA-TAXO-005",
+                span,
+                format!("Provider `{ident_str}` must have suffix `Provider`."),
+                None,
+            );
+        }
+
         syn::visit::visit_item_struct(self, i);
     }
 
