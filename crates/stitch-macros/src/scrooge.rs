@@ -46,7 +46,7 @@ fn inspect_type(ty: &Type, field_ident: Option<&Ident>) -> Result<()> {
                     }
                     syn::PathArguments::Parenthesized(paren) => {
                         for input in &paren.inputs {
-                            inspect_type(input, field_ident)?;
+                            inspect_type(&input.ty, field_ident)?;
                         }
                         if let syn::ReturnType::Type(_, output) = &paren.output {
                             inspect_type(output, field_ident)?;

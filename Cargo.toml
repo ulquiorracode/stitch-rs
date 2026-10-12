@@ -28,7 +28,7 @@ stitch-cli = { path = "crates/stitch-cli", version = "0.3.0" }
 machine-core = { git = "https://github.com/ulquiorracode/machine-rs.git", branch = "dev", version = "0.1.0", default-features = false }
 
 
-syn = { version = "2.0", features = ["full", "visit", "extra-traits"] }
+syn = { version = "3.0", features = ["full", "visit", "extra-traits"] }
 quote = "1.0"
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 clap = { version = "4.5", features = ["derive"] }

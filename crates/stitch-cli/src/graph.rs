@@ -171,7 +171,7 @@ impl<'a, 'ast> Visit<'ast> for NodeVisitor<'a> {
     }
 
     fn visit_item_impl(&mut self, i: &'ast ItemImpl) {
-        if let Some((_, trait_path, _)) = &i.trait_ {
+        if let Some((trait_path, _)) = &i.trait_ {
             let trait_name = trait_path
                 .segments
                 .last()
