@@ -720,7 +720,7 @@ impl<'a> AstScanner<'a> {
                         }
                         syn::PathArguments::Parenthesized(paren) => {
                             for input in &paren.inputs {
-                                self.check_field_type_recursive(input, struct_name, field_name);
+                                self.check_field_type_recursive(&input.ty, struct_name, field_name);
                             }
                             if let syn::ReturnType::Type(_, output) = &paren.output {
                                 self.check_field_type_recursive(output, struct_name, field_name);
@@ -835,7 +835,7 @@ fn has_repr_transparent(attrs: &[Attribute]) -> bool {
 }
 
 fn is_impl_of(item_impl: &ItemImpl, trait_name: &str) -> bool {
-    if let Some((_, path, _)) = &item_impl.trait_ {
+    if let Some((path, _)) = &item_impl.trait_ {
         path.segments.last().is_some_and(|s| s.ident == trait_name)
     } else {
         false
@@ -846,7 +846,9 @@ fn is_receiver_mut(sig: &syn::Signature) -> bool {
     matches!(
         sig.receiver(),
         Some(Receiver {
-            reference: Some(_),
+            kind: syn::ReceiverKind::Reference(_, _, Some(_)),
+            ..
+        }) | Some(Receiver {
             mutability: Some(_),
             ..
         })
