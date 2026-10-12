@@ -131,3 +131,31 @@ Where compile-time monomorphism cannot be used (e.g., dynamic plugins loaded at 
 - Terminals push domain events to the outbox synchronously during `execute`.
 - If capacity is exceeded, `push` safely returns `Err(event)` without data loss.
 - `drain()` employs panic-safe iteration, clearing elements as they are yielded to prevent stale retention if a consumer panics.
+
+---
+
+## 7. Rigid Hexagonal Taxonomy: The Canonical Triad
+
+SMA eliminates conceptual entropy by defining the strict relationship between ports, adapters, and providers:
+
+```text
+┌────────────────────────┐      ┌──────────────────────────┐      ┌─────────────────────────┐
+│          Port          │ ◄──► │         Adapter          │ ◄──► │        Provider         │
+│  (Inward SPI Boundary) │      │  (Bridge & Translator)   │      │ (Engine / State Source) │
+└────────────────────────┘      └──────────────────────────┘      └─────────────────────────┘
+```
+
+### 7.1 Triad Definitions & Invariants
+
+1. **`Port` (`*Port`)**:
+   - The pure abstract contract defined by the core/host runtime.
+   - Strictly `Send + Sync`, zero vendor types, zero foreign FFI pointers leaking across the boundary.
+2. **`Provider` (`*Provider` or Concrete Resource)**:
+   - The owner or engine of truth (OS file system, memory arena, SQLite, C-ABI game engine, external library).
+   - Never referenced directly by domain services or pipeline layers.
+3. **`Adapter` (`*Adapter`)**:
+   - The translation layer connecting a `Port` to a `Provider`.
+   - Encapsulates panic boundaries (`catch_unwind`), null safety, and memory marshaling.
+   - **Resolution of "Bridge"**: The legacy concept of "Bridge" is subsumed into `Adapter`. Any bridge is an adapter to an external provider.
+   - **Resolution of "Hub"**: Recognized as a **Composite Adapter** or **Routing Adapter** that aggregates or multiplexes multiple adapters across a shared port.
+
