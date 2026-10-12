@@ -130,8 +130,8 @@ impl<'a, 'ast> Visit<'ast> for NodeVisitor<'a> {
             "Terminal"
         } else if name.ends_with("Adapter") {
             "Adapter"
-        } else if name.ends_with("Hub") {
-            "Hub"
+        } else if name.ends_with("Provider") {
+            "Provider"
         } else if name.ends_with("Context") || name.ends_with("Blackboard") {
             "Blackboard"
         } else if name.ends_with("Token") {
@@ -219,6 +219,18 @@ impl ArchitectureGraph {
             if n.role == "Adapter" {
                 out.push_str(&format!(
                     "        {node_id}[\"Adapter: {name}\"]\n",
+                    node_id = n.id,
+                    name = n.name
+                ));
+            }
+        }
+        out.push_str("    end\n\n");
+
+        out.push_str("    subgraph Providers [Physical State & Engine Providers]\n");
+        for n in &self.nodes {
+            if n.role == "Provider" {
+                out.push_str(&format!(
+                    "        {node_id}[\"Provider: {name}\"]\n",
                     node_id = n.id,
                     name = n.name
                 ));

@@ -32,7 +32,7 @@ Enforces rigid domain naming conventions across hexagonal boundaries:
 | `SMA-TAXO-002` | Struct decorated with `#[stitch::terminal]` | Type name must end with `Terminal` | Error |
 | `SMA-TAXO-003` | Trait decorated with `#[stitch::port]` | Trait name must end with `Port` | Error |
 | `SMA-TAXO-004` | Struct decorated with `#[stitch::adapter]` | Type name must end with `Adapter` | Error |
-| `SMA-TAXO-005` | Struct decorated with `#[stitch::hub]` | Type name must end with `Hub` | Error |
+| `SMA-TAXO-005` | Struct decorated with `#[stitch::provider]` | Type name must end with `Provider` | Error |
 | `SMA-TAXO-006` | Struct decorated with `#[stitch::token]` | Type name must end with `Token` | Error |
 | `SMA-TAXO-007` | Struct decorated with `#[stitch::id]` | Type name must end with `Id` | Error |
 

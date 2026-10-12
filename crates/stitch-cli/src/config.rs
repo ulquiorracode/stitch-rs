@@ -216,10 +216,10 @@ impl Default for HealthThresholds {
 impl Default for StitchConfig {
     fn default() -> Self {
         let mut rules = HashMap::new();
-        // Defaults matching SMA specification
         rules.insert("TAXO-SUFFIX-LAYER".to_string(), RuleSeverity::Deny);
         rules.insert("TAXO-SUFFIX-PORT".to_string(), RuleSeverity::Deny);
         rules.insert("TAXO-SUFFIX-ADAPTER".to_string(), RuleSeverity::Deny);
+        rules.insert("TAXO-SUFFIX-PROVIDER".to_string(), RuleSeverity::Deny);
         rules.insert("TAXO-SUFFIX-TERMINAL".to_string(), RuleSeverity::Deny);
         rules.insert("TAXO-SUFFIX-TOKEN".to_string(), RuleSeverity::Deny);
         rules.insert("TAXO-SUFFIX-ID".to_string(), RuleSeverity::Deny);
@@ -405,7 +405,7 @@ pub fn canonical_rule_key(key: &str) -> &'static str {
         "SMA-TAXO-002" | "TAXO-SUFFIX-TERMINAL" => "SMA-TAXO-002",
         "SMA-TAXO-003" | "TAXO-SUFFIX-PORT" => "SMA-TAXO-003",
         "SMA-TAXO-004" | "TAXO-SUFFIX-ADAPTER" => "SMA-TAXO-004",
-        "SMA-TAXO-005" | "TAXO-SUFFIX-HUB" => "SMA-TAXO-005",
+        "SMA-TAXO-005" | "TAXO-SUFFIX-PROVIDER" => "SMA-TAXO-005",
         "SMA-TAXO-006" | "TAXO-SUFFIX-TOKEN" => "SMA-TAXO-006",
         "SMA-TAXO-007" | "TAXO-SUFFIX-ID" => "SMA-TAXO-007",
         "SMA-TAXO-008" | "TAXO-SUFFIX-BLACKBOARD" => "SMA-TAXO-008",

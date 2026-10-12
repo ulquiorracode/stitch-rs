@@ -9,7 +9,7 @@
 //! - **`Port`**: Pure abstract inward boundary (SPI). Zero foreign FFI types allowed.
 //! - **`Provider`**: External service, operating system resource, database, or native storage engine.
 //! - **`Adapter`**: Bidirectional bridge translating a `Port` to/from a `Provider`.
-//! - **`Hub`**: Composite or routing adapter multiplexing multiple child adapters across a shared port.
+//!   Composite or routing adapters multiplex multiple child adapters across a shared port.
 
 /// Suffix Contract: Must end in `Port`.
 ///
@@ -56,12 +56,6 @@ pub trait RequiresPort<P: Port + ?Sized> {
     /// Binds or accesses the port abstraction.
     fn port(&self) -> &P;
 }
-
-/// Composite or Routing Adapter Contract (formerly Hub).
-///
-/// Acts as a composite adapter multiplexing multiple child adapters, routing calls,
-/// or fanning out pipeline events across downstream layers.
-pub trait Hub: Send + Sync {}
 
 #[cfg(test)]
 mod tests {
@@ -110,9 +104,6 @@ mod tests {
         fn on_exit(&self, _ctx: &mut MockBlackboard, _outcome: &mut Result<(), ()>) {}
     }
 
-    struct SubsystemHub;
-    impl Hub for SubsystemHub {}
-
     #[test]
     fn test_taxonomy_trait_implementations() {
         let adapter = MockConsoleAdapter;
@@ -122,7 +113,5 @@ mod tests {
         let mut ctx = MockBlackboard;
         let flow = logging_layer.on_enter(&mut ctx, "test");
         assert!(flow.is_proceed());
-
-        let _hub = SubsystemHub;
     }
 }

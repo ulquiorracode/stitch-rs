@@ -86,13 +86,10 @@ pub fn adapter(_args: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn hub(_args: TokenStream, input: TokenStream) -> TokenStream {
+pub fn provider(_args: TokenStream, input: TokenStream) -> TokenStream {
     let item = parse_macro_input!(input as Item);
     if let Item::Struct(s) = &item {
-        if let Err(e) = verify_suffix(&s.ident, "Hub", SMA_TAXO_005) {
-            return e.to_compile_error().into();
-        }
-        if let Err(e) = inspect_struct_fields(&s.fields) {
+        if let Err(e) = verify_suffix(&s.ident, "Provider", SMA_TAXO_005) {
             return e.to_compile_error().into();
         }
     }
