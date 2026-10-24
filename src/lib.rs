@@ -28,8 +28,8 @@ pub mod prelude {
 
     #[cfg(feature = "macros")]
     pub use stitch_macros::{
-        adapter, blackboard, data, entity, event, id, layer, port, provider, terminal, token,
-        value_object,
+        adapter, blackboard, data, define_pipeline, entity, event, id, layer, port, provider,
+        terminal, token, value_object,
     };
 }
 
@@ -71,5 +71,34 @@ mod tests {
         let id = MockId(token);
         assert_eq!(id.raw_u64(), 42);
         assert!(core::mem::align_of::<MockContext>() >= 64);
+    }
+
+    define_pipeline! {
+        name: Sample,
+        context: MockContext,
+        intent: u32,
+        outcome: (),
+        error: (),
+        vis: pub,
+    }
+
+    struct MockSampleLayer;
+    impl SampleLayer for MockSampleLayer {
+        fn on_enter(&self, ctx: &mut MockContext, intent: &u32) -> FlowControl<(), (), ()> {
+            ctx.val += *intent as u64;
+            FlowControl::Proceed(())
+        }
+        fn on_exit(&self, _ctx: &mut MockContext, _intent: &u32, outcome: &mut Result<(), ()>) {
+            assert!(outcome.is_ok());
+        }
+    }
+
+    #[test]
+    fn test_define_pipeline_macro_generated_types() {
+        let mut ctx = MockContext { val: 10 };
+        let pipeline = SamplePipeline::new().with_layer(std::sync::Arc::new(MockSampleLayer));
+        let res = pipeline.dispatch(&mut ctx, &5);
+        assert!(res.is_ok());
+        assert_eq!(ctx.val, 15);
     }
 }
