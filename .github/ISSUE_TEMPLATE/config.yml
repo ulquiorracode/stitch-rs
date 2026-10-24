@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: GitHub Discussions / Community Support
+    url: https://github.com/ulquiorracode/stitch-rs/discussions
+    about: Ask questions, discuss architectures, or share ideas.
+  - name: Security Vulnerability Reporting
+    url: https://github.com/ulquiorracode/stitch-rs/security/advisories
+    about: Report sensitive security vulnerabilities privately.
