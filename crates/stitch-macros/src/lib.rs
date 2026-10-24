@@ -4,11 +4,13 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Item, ItemStruct, parse_macro_input};
 
+mod pipeline;
 mod rules;
 mod scrooge;
 mod taxonomy;
 mod visitor;
 
+use pipeline::*;
 use rules::*;
 use scrooge::*;
 use taxonomy::*;
@@ -227,4 +229,11 @@ pub fn command(_args: TokenStream, input: TokenStream) -> TokenStream {
         }
         _ => quote! { #item }.into(),
     }
+}
+
+/// Generates a complete SMA U-cycle execution pipeline, Layer trait, and Terminal executor.
+#[proc_macro]
+pub fn define_pipeline(input: TokenStream) -> TokenStream {
+    let def = parse_macro_input!(input as PipelineDef);
+    expand_define_pipeline(def).into()
 }
