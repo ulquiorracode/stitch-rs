@@ -1,5 +1,6 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use syn::ext::IdentExt;
 use syn::parse::{Parse, ParseStream};
 use syn::{Ident, Token, Type, Visibility};
 
@@ -21,6 +22,7 @@ pub struct PipelineDef {
     pub intent_ty: Type,
     pub outcome_ty: Type,
     pub error_ty: Type,
+    pub crate_path: syn::Path,
 }
 
 impl Parse for PipelineDef {
@@ -31,12 +33,16 @@ impl Parse for PipelineDef {
         let mut intent_ty = None;
         let mut outcome_ty = None;
         let mut error_ty = None;
+        let mut crate_path = None;
 
         while !input.is_empty() {
-            let key: Ident = input.parse()?;
+            let key = input.call(Ident::parse_any)?;
             input.parse::<Token![:]>()?;
 
             match key.to_string().as_str() {
+                "crate" => {
+                    crate_path = Some(input.parse()?);
+                }
                 "vis" => {
                     vis = input.parse()?;
                 }
@@ -79,6 +85,7 @@ impl Parse for PipelineDef {
             .ok_or_else(|| syn::Error::new(input.span(), "missing `intent` in define_pipeline!"))?;
         let outcome_ty = outcome_ty.unwrap_or_else(|| syn::parse_quote!(()));
         let error_ty = error_ty.unwrap_or_else(|| syn::parse_quote!(()));
+        let crate_path = crate_path.unwrap_or_else(|| syn::parse_quote!(::stitch_rs));
 
         Ok(PipelineDef {
             vis,
@@ -87,6 +94,7 @@ impl Parse for PipelineDef {
             intent_ty,
             outcome_ty,
             error_ty,
+            crate_path,
         })
     }
 }
@@ -99,6 +107,7 @@ pub fn expand_define_pipeline(def: PipelineDef) -> TokenStream2 {
         intent_ty,
         outcome_ty,
         error_ty,
+        crate_path,
     } = def;
 
     let layer_trait = quote::format_ident!("{}Layer", name);
@@ -113,7 +122,7 @@ pub fn expand_define_pipeline(def: PipelineDef) -> TokenStream2 {
                 &self,
                 ctx: &mut #context_ty,
                 intent: &#intent_ty,
-            ) -> ::stitch_core::FlowControl<#outcome_ty, #error_ty, ()>;
+            ) -> #crate_path::FlowControl<#outcome_ty, #error_ty, ()>;
 
             /// Ascent phase: audit logging, telemetry, or output transformation.
             fn on_exit(
@@ -128,7 +137,7 @@ pub fn expand_define_pipeline(def: PipelineDef) -> TokenStream2 {
         #[derive(Debug, Clone, Copy, Default)]
         #vis struct #terminal_struct;
 
-        impl ::stitch_core::middleware::Terminal<#context_ty, #intent_ty, #outcome_ty, #error_ty>
+        impl #crate_path::middleware::Terminal<#context_ty, #intent_ty, #outcome_ty, #error_ty>
             for #terminal_struct
         {
             #[inline(always)]
@@ -182,15 +191,15 @@ pub fn expand_define_pipeline(def: PipelineDef) -> TokenStream2 {
 
                 for layer in &self.layers {
                     match layer.on_enter(ctx, intent) {
-                        ::stitch_core::FlowControl::Proceed(()) => {
+                        #crate_path::FlowControl::Proceed(()) => {
                             entered_count += 1;
                         }
-                        ::stitch_core::FlowControl::ShortCircuit(out) => {
+                        #crate_path::FlowControl::ShortCircuit(out) => {
                             entered_count += 1;
                             early_outcome = ::core::option::Option::Some(out);
                             break;
                         }
-                        ::stitch_core::FlowControl::Halt(err) => {
+                        #crate_path::FlowControl::Halt(err) => {
                             halted = true;
                             early_err = ::core::option::Option::Some(err);
                             break;
@@ -204,7 +213,7 @@ pub fn expand_define_pipeline(def: PipelineDef) -> TokenStream2 {
                     ::core::result::Result::Ok(out)
                 } else {
                     let mut terminal = #terminal_struct;
-                    use ::stitch_core::middleware::Terminal;
+                    use #crate_path::middleware::Terminal;
                     terminal.execute(ctx, intent.clone())
                 };
 

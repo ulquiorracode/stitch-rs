@@ -74,6 +74,7 @@ mod tests {
     }
 
     define_pipeline! {
+        crate: crate,
         name: Sample,
         context: MockContext,
         intent: u32,
