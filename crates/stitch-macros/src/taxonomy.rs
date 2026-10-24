@@ -70,7 +70,7 @@ pub fn verify_terminal_impl(item_impl: &ItemImpl) -> Result<()> {
 /// Verifies Query trait implementation: strictly immutable context `&TCtx` and no mutation statements.
 pub fn verify_query_impl(item_impl: &ItemImpl) -> Result<()> {
     // SMA-CQS-051: Reject hybrid types implementing both Query and Command
-    if let Some((_, path, _)) = &item_impl.trait_ {
+    if let Some((path, _)) = &item_impl.trait_ {
         let trait_name = path
             .segments
             .last()
@@ -135,7 +135,7 @@ pub fn verify_command_impl(item_impl: &ItemImpl) -> Result<()> {
 fn verify_receiver_immutable(sig: &Signature) -> Result<()> {
     match sig.receiver() {
         Some(Receiver {
-            reference: Some(_),
+            kind: syn::ReceiverKind::Reference(_, _, None),
             mutability: None,
             ..
         }) => Ok(()),

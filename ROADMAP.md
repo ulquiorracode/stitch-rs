@@ -22,10 +22,10 @@
   - [x] Symmetrical U-cycle error handling: `FlowControl::Halt` executes halting layer's own `on_exit` telemetry.
   - [x] Compile-time L1D cache-line alignment contract (`ASSERT_CACHE_ALIGNED`) for `Blackboard` implementations (`#[repr(C, align(64))]`).
   - [x] Contract Invariant M7 panic policy & perimeter `dispatch_isolated` error barrier under `feature = "std"`.
-  - [x] Hexagonal SPI boundaries: `Port`, `Adapter<P>` with statically bounded `type TargetPort`, and `Hub`.
+  - [x] Hexagonal SPI boundaries: `Port`, `Adapter<P>` with statically bounded `type TargetPort`, and `Provider`.
   - [x] Transparent 64-bit register identity tokens (`StitchToken`, `StitchId`, `RawToken`, `RawId`).
 - [x] **Procedural Macros & Architecture-as-Code**:
-  - [x] Suffix enforcement (`SMA-TAXO-*` for `Layer`, `Terminal`, `Port`, `Adapter`, `Hub`, `Token`, `Id`).
+  - [x] Suffix enforcement (`SMA-TAXO-*` for `Layer`, `Terminal`, `Port`, `Adapter`, `Provider`, `Token`, `Id`).
   - [x] Recursive heap allocation ban (`SMA-SCROOGE-010`) in hot-path structs.
   - [x] Traversal hot-path denylist (`SMA-HOTPATH-020`..`022` for allocations and panics in `on_enter`/`on_exit`).
 - [x] **CLI Tool Suite (`stitch`)**:
@@ -69,4 +69,3 @@
 - [ ] **Cross-Platform Benchmarking Suite**:
   - [ ] Integrate Hyperfine, cargo-flamegraph, and DHAT profiling harnesses across benchmarks.
   - [ ] Rigorous cache miss, branch misprediction, and heap allocation ledger reporting.
-

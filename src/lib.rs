@@ -28,7 +28,7 @@ pub mod prelude {
 
     #[cfg(feature = "macros")]
     pub use stitch_macros::{
-        adapter, blackboard, data, entity, event, hub, id, layer, port, terminal, token,
+        adapter, blackboard, data, entity, event, id, layer, port, provider, terminal, token,
         value_object,
     };
 }

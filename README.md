@@ -74,8 +74,8 @@ Outcome ◄─────── [Layer A: on_exit]  ◄── [Layer B: on_exit
 | **`Terminal`** | Leaf node terminating descent (Point of Puncture) | Executes core domain computation |
 | **`Pipeline`** | Monomorphic U-cycle runner | Closed topology via sealed traits |
 | **`Port`** | Inward SPI boundary trait | Decouples engine algorithms from adapters |
-| **`Adapter`** | Concrete vendor implementation of a Port | Statically bounded target port |
-| **`Hub`** | Dual-role coordinator | Fractal port/adapter composition |
+| **`Adapter`** | Bidirectional translation bridge to a Provider | Encapsulates FFI, panic guards, null checks, and composite multiplexing |
+| **`Provider`** | External source, database, OS runtime, or state engine | Owned external resource adapted to a Port |
 
 For detailed memory layouts, failure semantics, and contract invariants, see [ARCHITECTURE.md](ARCHITECTURE.md).
 

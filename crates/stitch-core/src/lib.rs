@@ -5,7 +5,7 @@
 //!
 //! # Core Taxonomical Dimensions
 //! - **Operational Nodes**: [`Layer`], [`Terminal`], [`Pipeline`]
-//! - **Hexagonal Abstraction Boundaries**: [`Port`], [`Adapter`], [`Hub`]
+//! - **Hexagonal Abstraction Boundaries**: [`Port`], [`Adapter`], [`Provider`]
 //! - **Memory & Scratchpads**: [`Blackboard`]
 //! - **Registration & Identification**: [`StitchToken`], [`StitchId`], [`RawToken`], [`RawId`]
 //! - **Domain Intent Accounting**: [`Entity`], [`ValueObject`], [`Event`], [`Data`]
@@ -33,7 +33,7 @@ pub use hash::{fnv1a_32, fnv1a_64};
 pub use middleware::{Layer, StatelessLayer, StatelessLayerTable, Terminal};
 pub use outbox::Outbox;
 pub use pipeline::{Pipeline, PipelineChain, StackNode, TerminalNode};
-pub use taxonomy::{Adapter, Hub, Port};
+pub use taxonomy::{Adapter, Port, Provider};
 pub use token::{RawId, RawToken, StitchId, StitchToken};
 
 /// Common imports and contracts for Sewing Machine Architecture (SMA).
@@ -50,7 +50,7 @@ pub mod prelude {
     pub use crate::middleware::{Layer, StatelessLayer, StatelessLayerTable, Terminal};
     pub use crate::outbox::Outbox;
     pub use crate::pipeline::{Pipeline, PipelineChain, StackNode, TerminalNode};
-    pub use crate::taxonomy::{Adapter, Hub, Port};
+    pub use crate::taxonomy::{Adapter, Port, Provider};
     pub use crate::token::{RawId, RawToken, StitchId, StitchToken};
 }
 
